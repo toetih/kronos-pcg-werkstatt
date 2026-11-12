@@ -1,0 +1,39 @@
+@* Auswahl mehrerer Dateien oder eines ganzen Ordners (Folder: am Mac/PC; iPad kann nur einzelne Dateien). Bei einem
+   Ordner kommt zu jeder Datei ihr Pfad im Ordner mit, damit gleiche Dateinamen in verschiedenen Unterordnern
+   auseinandergehalten werden. *@
+@inject IJSRuntime JS
+<span class="picker">
+    <button class="secondary" type="button" tabindex="-1">@Label</button>
+    @if (Folder)
+    {
+        <InputFile @ref="_input" OnChange="Changed" multiple webkitdirectory aria-label="@Label" />
+    }
+    else
+    {
+        <InputFile @ref="_input" OnChange="Changed" multiple aria-label="@Label" />
+    }
+</span>
+
+@code {
+    [Parameter] public string Label { get; set; }
+    [Parameter] public bool Folder { get; set; }
+    [Parameter] public EventCallback<PickedFiles> OnFiles { get; set; }
+
+    private InputFile _input;
+
+    private async Task Changed(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles(50000);
+        string[] paths = null;
+        try
+        {
+            paths = await JS.InvokeAsync<string[]>("pcgRelativePaths", _input.Element);
+        }
+        catch (JSException)
+        {
+            // Ohne Pfade geht es mit den Dateinamen weiter.
+        }
+
+        await OnFiles.InvokeAsync(new PickedFiles(files, paths != null && paths.Length == files.Count ? paths : files.Select(file => file.Name).ToArray()));
+    }
+}

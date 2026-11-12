@@ -1,0 +1,642 @@
+@using PcgTools.Model.Common.Synth.Meta
+@using PcgTools.Model.Common.Synth.PatchCombis
+@using PcgTools.Model.Common.Synth.PatchPrograms
+@using KronosPcg.Tools
+
+<div class="wrap">
+    <header class="top">
+        <div>
+            <h1>@T("Kronos PCG Werkstatt", "Kronos PCG Toolbox")</h1>
+            <p class="sub">@T("Sound-Pakete einfügen, Combis und Programs übernehmen, umbenennen und sortieren. Für Korg Kronos, OS 3.x.", "Add sound packs, transfer, rename and sort Combis and Programs. For Korg Kronos, OS 3.x.")</p>
+        </div>
+        <span style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 12px">
+            @* Sprachschalter: merkt die Wahl und lädt die Seite neu (geladene Dateien müssen danach neu gewählt werden). *@
+            <button class="link" type="button" lang="@T("en", "de")" @onclick="SwitchLanguage"
+                    title="@T("Wechselt zu Englisch. Die Seite lädt neu, geladene Dateien musst du danach neu wählen.", "Switches to German. The page reloads, so you will have to choose your files again.")">@T("English", "Deutsch")</button>
+            <span class="badge">@T("Dateien bleiben auf deinem Gerät", "Files stay on your device")</span>
+        </span>
+    </header>
+
+    <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="@P(_tab == Tab.Insert)" @onclick="() => _tab = Tab.Insert">@T("Sound einfügen", "Add a sound")</button>
+        <button class="tab" role="tab" aria-selected="@P(_tab == Tab.Copy)" @onclick="() => _tab = Tab.Copy">@T("Übernehmen", "Transfer")</button>
+        <button class="tab" role="tab" aria-selected="@P(_tab == Tab.Sort)" @onclick="() => _tab = Tab.Sort">@T("Sortieren", "Sort")</button>
+    </div>
+
+    <div class="stack" hidden="@(_tab != Tab.Insert)">
+        <AssistantView />
+    </div>
+
+    @* Beide Reiter bleiben im Dokument (nur versteckt), damit Auswahl und geladene Dateien beim Wechseln erhalten bleiben. *@
+    <div class="stack" hidden="@(_tab != Tab.Sort)">
+        <SortView OfferedFile="_target" />
+    </div>
+
+    <div class="stack" hidden="@(_tab != Tab.Copy)">
+
+    <div class="bench">
+        @* ================= Quelle ================= *@
+        <section class="pane" aria-label="@T("Quelle", "Source")">
+            <div class="pane-head">
+                <div class="pane-title">
+                    <span class="eyebrow">@T("Quelle · wird nur gelesen", "Source · read only")</span>
+                    @if (_source.Pcg != null)
+                    {
+                        <span class="file">@_source.Name</span>
+                    }
+                </div>
+                @if (_source.Pcg != null)
+                {
+                    <div class="bar">
+                        <span class="mode">
+                            <button type="button" aria-pressed="@P(_sourceView == View.Combis)" @onclick="() => SetSourceView(View.Combis)">Combis</button>
+                            <button type="button" aria-pressed="@P(_sourceView == View.Programs)" @onclick="() => SetSourceView(View.Programs)">Programs</button>
+                        </span>
+                        <FilePicker Label="@T("Andere Datei", "Other file")" Secondary="true" OnFile="f => LoadFile(_source, f)" />
+                    </div>
+                    @if (_source.Status != null)
+                    {
+                        <SlotProgress Slot="_source" />
+                    }
+                    @if (_source.Error != null)
+                    {
+                        <p class="hint" style="color:var(--bad)">@_source.Error</p>
+                    }
+                    <div class="chips">
+                        @foreach (var bank in SourceBanks())
+                        {
+                            <button class="chip" type="button" aria-pressed="@P(bank == _sourceBank)" @onclick="() => _sourceBank = bank">
+                                @bank.Id<small>@TypePrefix(bank)@Filled(bank)</small>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            @if (_source.Pcg == null)
+            {
+                <LoadArea Slot="_source" Text="@T("Die PCG, aus der du Sounds holen willst, z. B. ein gekauftes Sound-Paket.", "The PCG you want to take sounds from, e.g. a sound pack you bought.")" OnFile="f => LoadFile(_source, f)" />
+            }
+            else
+            {
+                <ul class="list">
+                    @foreach (var patch in SourcePatches())
+                    {
+                        var id = patch.Id;
+                        var isCombi = patch is ICombi;
+                        var selected = isCombi ? _selectedCombis.Contains(id) : _selectedPrograms.Contains(id);
+                        <li class="row @(selected ? "sel" : "")">
+                            <input type="checkbox" id="s-@id" checked="@selected" @onchange="() => ToggleSource(patch)" />
+                            <label class="id" for="s-@id">@id</label>
+                            <label class="name" for="s-@id">@patch.Name</label>
+                            <span class="meta">
+                                @if (patch is ICombi combi)
+                                {
+                                    <span>@ActiveTimbres(combi) Timbres</span>
+                                    <button class="link" type="button" @onclick="() => ToggleExpanded(id)" aria-expanded="@P(_expanded.Contains(id))">
+                                        @(_expanded.Contains(id) ? T("zu", "close") : "Timbres")
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="type">@CopyService.SynthesisType((IProgramBank)patch.Parent)</span>
+                                }
+                            </span>
+                            @if (patch is ICombi expandedCombi && _expanded.Contains(id))
+                            {
+                                <div class="timbres">
+                                    @if (selected)
+                                    {
+                                        <div class="tb-actions">
+                                            <button type="button" class="secondary" @onclick="() => NameProgramsAfterCombi(expandedCombi)">@T("Programs nach Combi benennen (01, 02 …)", "Name Programs after the Combi (01, 02 …)")</button>
+                                            @if (HasProgramRenames(expandedCombi))
+                                            {
+                                                <button type="button" class="link" @onclick="() => ResetProgramNames(expandedCombi)">@T("Namen zurücksetzen", "Reset names")</button>
+                                            }
+                                            <span class="hint">@T("Nummern = alle Timbre-Plätze des Programs. Stumme Timbres behalten ihren Namen.", "Numbers = all timbre slots that use the Program. Programs on muted timbres keep their name.")</span>
+                                        </div>
+                                    }
+                                    @foreach (var timbre in TimbreRows(expandedCombi))
+                                    {
+                                        var newProgramName = _renamesSource.GetValueOrDefault("P:" + timbre.ProgramId);
+                                        <div class="tb @(timbre.Off ? "off" : "")">
+                                            <span class="t"><span>Timbre @timbre.Number</span><span>@timbre.Status</span></span>
+                                            <span class="map">@timbre.ProgramId@(selected && TargetOf(timbre.ProgramId) is { } to ? $" → {to}" : "")</span>
+                                            @if (newProgramName != null && selected)
+                                            {
+                                                <span class="renamed-name">@newProgramName <span class="tag ren">@T("umbenannt", "renamed")</span></span>
+                                                <span class="was">@T("war:", "was:") @timbre.ProgramName</span>
+                                            }
+                                            else
+                                            {
+                                                <span>@timbre.ProgramName</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </li>
+                    }
+                </ul>
+                <div class="ctrl">
+                    <p class="hint">
+                        @if (_sourceView == View.Combis)
+                        {
+                            <text>@T("Combis anhaken. Die Programs, die sie nutzen, kommen automatisch mit, auch die von stummen Timbres.", "Tick Combis. The Programs they use come along automatically, including those on muted timbres.")</text>
+                        }
+                        else
+                        {
+                            <text>@T("Einzelne Programs anhaken. Sie landen in einer Ziel-Bank ihres Typs (HD-1 oder EXi).", "Tick single Programs. They go into a target bank of their type (HD-1 or EXi).")</text>
+                        }
+                    </p>
+                </div>
+            }
+        </section>
+
+        @* ================= Ziel ================= *@
+        <section class="pane" aria-label="@T("Ziel", "Target")">
+            <div class="pane-head">
+                <div class="pane-title">
+                    <span class="eyebrow">@T("Ziel · bleibt unverändert, Ergebnis ist eine neue Datei", "Target · stays unchanged, the result is a new file")</span>
+                    @if (_target.Pcg != null)
+                    {
+                        <span class="file">@_target.Name</span>
+                    }
+                </div>
+                @if (_target.Pcg != null)
+                {
+                    <div class="bar">
+                        <span class="mode">
+                            <button type="button" aria-pressed="@P(_targetView == View.Combis)" @onclick="() => SetTargetView(View.Combis)">Combis</button>
+                            <button type="button" aria-pressed="@P(_targetView == View.Programs)" @onclick="() => SetTargetView(View.Programs)">Programs</button>
+                        </span>
+                        <FilePicker Label="@T("Andere Datei", "Other file")" Secondary="true" OnFile="f => LoadFile(_target, f)" />
+                    </div>
+                    @if (_target.Status != null)
+                    {
+                        <SlotProgress Slot="_target" />
+                    }
+                    @if (_target.Error != null)
+                    {
+                        <p class="hint" style="color:var(--bad)">@_target.Error</p>
+                    }
+                    <div class="chips">
+                        @foreach (var bank in TargetViewBanks())
+                        {
+                            var arriving = IncomingCount(bank);
+                            <button class="chip @(arriving > 0 ? "dest" : "")" type="button" aria-pressed="@P(bank == _targetBank)" @onclick="() => _targetBank = bank"
+                                    title="@(arriving > 0 ? T($"{arriving} neue Sounds landen in {bank.Id}", $"{arriving} new sounds go to {bank.Id}") : null)">
+                                @bank.Id<small>@TypePrefix(bank)@Free(bank) @T("frei", "free")</small>
+                                @if (arriving > 0)
+                                {
+                                    <span class="arrive">+@arriving</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            @if (_target.Pcg == null)
+            {
+                <LoadArea Slot="_target" Text="@T("Deine eigene PCG, in die die Sounds sollen. Sie wird nicht verändert.", "Your own PCG that the sounds should go into. It is not changed.")" OnFile="f => LoadFile(_target, f)" />
+            }
+            else
+            {
+                <ul class="list">
+                    @if (_targetBank != null)
+                    {
+                        var incoming = IncomingNames();
+                        foreach (var patch in _targetBank.Patches.Where(patch => !_onlyUnused || _unused.Contains(patch.Id)))
+                        {
+                            var free = patch.IsEmptyOrInit;
+                            var isStart = IsStart(patch);
+                            var arrives = incoming.TryGetValue(Key(patch), out var newName);
+                            var renameKey = RenameKey(patch, arrives);
+                            var renamed = IsRenamed(renameKey);
+                            var deleted = _deletes.ContainsKey(Key(patch));
+                            if (deleted && !arrives)
+                            {
+                                renameKey = null;
+                                renamed = false;
+                            }
+                            var shownName = arrives ? newName : free ? T("frei", "free") : _renamesTarget.GetValueOrDefault(Key(patch)) ?? patch.Name;
+                            var asking = _askDelete == Key(patch);
+                            <li class="row no-check target @(free && !arrives ? "free" : "") @(isStart ? "start" : "") @(arrives ? "incoming" : "") @(renamed ? "renamed" : "") @(deleted && !arrives ? "deleted" : "")"
+                                @onclick="() => SetStart(patch)" title="@T($"Ab {patch.Id} ablegen", $"Place from {patch.Id}")">
+                                <span class="id">@patch.Id</span>
+                                @if (_editKey == renameKey && renameKey != null)
+                                {
+                                    <span class="rename" @onclick:stopPropagation="true">
+                                        <input @ref="_editInput" value="@_editText" maxlength="24" aria-label="@T($"Neuer Name für {patch.Id}", $"New name for {patch.Id}")"
+                                               @oninput="e => _editText = e.Value?.ToString()" @onkeydown="EditKey" />
+                                        <span class="count">@((_editText ?? "").Length)/24</span>
+                                        <button type="button" class="icon-btn ok" @onclick="CommitRename" aria-label="@T("Namen übernehmen", "Apply name")">✓</button>
+                                        <button type="button" class="icon-btn" @onclick="CancelRename" aria-label="@T("Abbrechen", "Cancel")">✕</button>
+                                        @if (_editError != null)
+                                        {
+                                            <span class="rename-error">@_editError</span>
+                                        }
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="name">@shownName</span>
+                                }
+                                <span class="meta">
+                                    @if (arrives)
+                                    {
+                                        <span class="tag new">@T("neu", "new")</span>
+                                    }
+                                    @if (renamed)
+                                    {
+                                        <span class="tag ren">@T("umbenannt", "renamed")</span>
+                                    }
+                                    @if (isStart)
+                                    {
+                                        <span class="tag start">@T("ab hier", "from here")</span>
+                                    }
+                                    @if (!arrives && !deleted && _unused.Contains(patch.Id) && patch is IProgram)
+                                    {
+                                        <span class="tag unused" title="@T("Keine Combi, kein Set-List-Slot und kein Drum Track nutzt diesen Sound", "No Combi, no Set List slot and no Drum Track uses this sound")">@T("ungenutzt", "unused")</span>
+                                    }
+                                    @if (!arrives && !deleted && DuplicateOf(patch) is { } original)
+                                    {
+                                        <span class="tag dup" title="@T($"Byte-gleich mit {original}", $"Byte-identical to {original}")">@T("doppelt", "duplicate") = @original</span>
+                                    }
+                                    @if (patch is IProgram)
+                                    {
+                                        <span class="type">@CopyService.SynthesisType((IProgramBank)patch.Parent)</span>
+                                    }
+                                    @if (deleted)
+                                    {
+                                        <span class="tag del" title="@(arrives ? T($"ersetzt {_deletes[Key(patch)].Name}", $"replaces {_deletes[Key(patch)].Name}") : null)">@(arrives ? T("ersetzt", "replaced") : T("wird gelöscht", "will be deleted"))</span>
+                                        <button type="button" class="icon-btn" title="@T("Nicht löschen", "Don't delete")" aria-label="@T($"{patch.Id} nicht löschen", $"Don't delete {patch.Id}")"
+                                                @onclick="() => UndoDelete(Key(patch))" @onclick:stopPropagation="true">↺</button>
+                                    }
+                                    @if (renameKey != null && _editKey != renameKey)
+                                    {
+                                        <button type="button" class="icon-btn" title="@T("Umbenennen", "Rename")" aria-label="@T($"{patch.Id} umbenennen", $"Rename {patch.Id}")"
+                                                @onclick="() => StartRename(renameKey, shownName)" @onclick:stopPropagation="true">✎</button>
+                                    }
+                                    @if (!free && !arrives && !deleted && ((IBank)patch.Parent).IsWritable && _editKey != renameKey)
+                                    {
+                                        <button type="button" class="icon-btn" title="@T("Löschen", "Delete")" aria-label="@T($"{patch.Id} löschen", $"Delete {patch.Id}")"
+                                                @onclick="() => AskDelete(patch)" @onclick:stopPropagation="true">🗑</button>
+                                    }
+                                </span>
+                                @if (asking)
+                                {
+                                    <div class="ask-delete" @onclick:stopPropagation="true">
+                                        <strong>@T($"{patch.Id} „{patch.Name}“ löschen?", $"Delete {patch.Id} “{patch.Name}”?")</strong>
+                                        @if (_askDeleteUsers.Count == 0)
+                                        {
+                                            <span>@T("Keine Combi und kein Set-List-Slot nutzt diesen Sound.", "No Combi and no Set List slot uses this sound.")</span>
+                                        }
+                                        else
+                                        {
+                                            @if (English)
+                                            {
+                                                <span>Careful: @_askDeleteUsers.Count @(_askDeleteUsers.Count == 1 ? "place uses" : "places use") this sound and will sound different afterwards:</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Achtung: @_askDeleteUsers.Count @(_askDeleteUsers.Count == 1 ? "Stelle nutzt" : "Stellen nutzen") diesen Sound und @(_askDeleteUsers.Count == 1 ? "klingt" : "klingen") danach anders:</span>
+                                            }
+                                            <ul>
+                                                @foreach (var user in _askDeleteUsers.Take(6))
+                                                {
+                                                    <li>@user</li>
+                                                }
+                                                @if (_askDeleteUsers.Count > 6)
+                                                {
+                                                    <li>@T($"und {_askDeleteUsers.Count - 6} weitere", $"and {_askDeleteUsers.Count - 6} more")</li>
+                                                }
+                                            </ul>
+                                        }
+                                        <span class="actions">
+                                            <button type="button" class="secondary danger" @onclick="() => ConfirmDelete(patch)">@T("Zum Löschen vormerken", "Mark for deletion")</button>
+                                            <button type="button" class="link" @onclick="() => _askDelete = null">@T("Abbrechen", "Cancel")</button>
+                                        </span>
+                                    </div>
+                                }
+                            </li>
+                        }
+                    }
+                </ul>
+                <div class="ctrl">
+                    <p class="hint">@T("Auf einen Platz in der Liste tippen: Ab dort werden Sounds dieser Art abgelegt (Combis, HD-1 oder EXi). Belegte Plätze werden übersprungen, nie überschrieben; ist die Bank voll, geht es in der nächsten User-Bank desselben Typs weiter. Mit ✎ umbenennen, auch die neuen (grünen) Sounds. Mit 🗑 löschen: Der Platz wird frei und kann gleich neu belegt werden.", "Tap a slot in the list: sounds of that kind (Combis, HD-1 or EXi) are placed from there on. Used slots are skipped, never overwritten; when the bank is full, it continues in the next user bank of the same type. Use ✎ to rename, including the new (green) sounds. Use 🗑 to delete: the slot becomes free and can be filled again right away.")</p>
+                    <div class="ctrl-row">
+                        <span class="lbl">@T("Ablegen ab", "Place from")</span>
+                        <div class="chips">
+                            @foreach (var (label, text, clear) in StartPills())
+                            {
+                                <span class="start-pill">@label @text
+                                    @if (clear != null)
+                                    {
+                                        <button type="button" class="link" @onclick="clear" aria-label="@T($"Startplatz {label} zurücksetzen", $"Reset start slot for {label}")">✕</button>
+                                    }
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    @if (_targetBank is IProgramBank && (UnusedIn(_targetBank) > 0 || _onlyUnused))
+                    {
+                        <div class="ctrl-row">
+                            <span class="lbl">@T("Aufräumen", "Clean up")</span>
+                            <label class="hint"><input type="checkbox" checked="@_onlyUnused" @onchange="() => _onlyUnused = !_onlyUnused" />
+                                @T($"Nur die {UnusedIn(_targetBank)} ungenutzten Sounds von {_targetBank.Id} zeigen", $"Show only the {UnusedIn(_targetBank)} unused sounds in {_targetBank.Id}")</label>
+                            <button type="button" class="secondary danger" disabled="@(UnusedIn(_targetBank) == 0)" @onclick="MarkUnused">@T($"Alle {UnusedIn(_targetBank)} zum Löschen vormerken", $"Mark all {UnusedIn(_targetBank)} for deletion")</button>
+                        </div>
+                        <p class="hint">@T("„Ungenutzt“ heißt: Keine Combi, kein Set-List-Slot und kein Drum Track nutzt den Sound. Sounds, die du direkt im Program-Modus spielst, zählen auch dazu. Gelöscht wird erst nach deiner Bestätigung unten.", "“Unused” means: no Combi, no Set List slot and no Drum Track uses the sound. Sounds you play directly in Program mode count as unused too. Nothing is deleted until you confirm below.")</p>
+                    }
+                    <label class="hint"><input type="checkbox" checked="@_alwaysCopyPrograms" @onchange="() => { _alwaysCopyPrograms = !_alwaysCopyPrograms; Changed(); }" />
+                        @T("Auch Programs kopieren, die das Ziel schon hat (z. B. Werks-Programs). Sinnvoll für Pakete, die nicht von den Werks-Bänken abhängen sollen.", "Also copy Programs the target already has (e.g. factory Programs). Useful for packs that should not depend on the factory banks.")</label>
+                </div>
+            }
+        </section>
+    </div>
+
+    @* ================= Prüfung und Ergebnis ================= *@
+    <section class="check" aria-live="polite">
+        <h2>@T("Übernehmen", "Transfer")</h2>
+        @{ var plan = Plan(); }
+        @if (_sameFile)
+        {
+            <div class="error">
+                <strong>@T("Quelle und Ziel sind dieselbe Datei.", "Source and target are the same file.")</strong>
+                <span>@T("Alle Sounds sind dort schon vorhanden, es würde nichts kopiert. Wähle als Ziel deine eigene PCG. Zum Umordnen innerhalb einer Datei nimm den Reiter „Sortieren“.", "All sounds are already there, so nothing would be copied. Choose your own PCG as the target. To reorder sounds within one file, use “Sort”.")</span>
+            </div>
+        }
+        <div class="summary">
+            @if (plan.Combis + plan.SinglePrograms == 0 && RenameCount == 0 && _deletes.Count == 0)
+            {
+                <span class="hint">@T("Links Combis oder Programs anhaken, rechts die Ziel-Bänke wählen. Oder rechts nur umbenennen oder löschen.", "Tick Combis or Programs on the left and choose the target banks on the right. Or just rename or delete on the right.")</span>
+            }
+            @if (plan.Combis > 0)
+            {
+                <span class="pill info">@plan.Combis Combi(s)</span>
+            }
+            @if (Shown is { } shown)
+            {
+                var neu = shown.Programs.Count(program => !program.Reused);
+                var vorhanden = shown.Programs.Count - neu;
+                <span class="pill ok">@neu Program(s) @T("neu", "new")</span>
+                @if (vorhanden > 0)
+                {
+                    <span class="pill info">@vorhanden @T("schon im Ziel, werden mitgenutzt", "already in the target, will be reused")</span>
+                }
+                @if (shown.WaveSequencesCopied.Count > 0)
+                {
+                    <span class="pill ok">@shown.WaveSequencesCopied.Count Wave Sequence(s) @T("kopiert", "copied")</span>
+                }
+            }
+            else if (plan.Hd1 + plan.Exi > 0)
+            {
+                <span class="pill info">@T($"bis zu {plan.Hd1} HD-1- und {plan.Exi} EXi-Program(s)", $"up to {plan.Hd1} HD-1 and {plan.Exi} EXi Program(s)")</span>
+            }
+            @if (RenameCount > 0)
+            {
+                <span class="pill info">@RenameCount @T("umbenannt", "renamed")</span>
+            }
+            @if (_deletes.Count > 0)
+            {
+                <span class="pill bad">@_deletes.Count @T("gelöscht", "deleted")</span>
+            }
+            @if (_previewBusy)
+            {
+                <span class="pill info">@T("Vorschau wird berechnet …", "Calculating preview …")</span>
+            }
+            @if (_previewError != null)
+            {
+                <span class="pill bad">@_previewError.Message</span>
+            }
+            @foreach (var warning in plan.Warnings)
+            {
+                <span class="pill warn">@warning</span>
+            }
+        </div>
+        @if (_previewError?.Problems.Count > 0)
+        {
+            <ul class="hint" style="margin:0;padding-left:18px">
+                @foreach (var problem in _previewError.Problems.Take(8))
+                {
+                    <li>@problem</li>
+                }
+            </ul>
+        }
+        @if (_preview != null && _result == null)
+        {
+            <p class="hint">@T("Grün in der Ziel-Liste: dort landen die Sounds. Bei „Timbres“ siehst du für jedes Program den neuen Platz.", "Green in the target list: that is where the sounds go. Under “Timbres” you see the new slot of each Program.")</p>
+        }
+        @if (_deletes.Count > 0 && _result == null)
+        {
+            <div class="warnbox">
+                @if (English)
+                {
+                    <strong>@_deletes.Count @(_deletes.Count == 1 ? "sound" : "sounds") will be deleted</strong>
+                }
+                else
+                {
+                    <strong>@_deletes.Count @(_deletes.Count == 1 ? "Sound wird" : "Sounds werden") gelöscht</strong>
+                }
+                <ul>
+                    @foreach (var (key, entry) in _deletes.OrderByDescending(pair => pair.Value.Users.Count).ThenBy(pair => pair.Key, StringComparer.Ordinal).Take(12))
+                    {
+                        @if (English)
+                        {
+                            <li>@key[2..] “@entry.Name” – @(entry.Users.Count == 0 ? "not used anywhere" : $"used by {entry.Users.Count}: {string.Join(", ", entry.Users.Take(3))}{(entry.Users.Count > 3 ? " …" : "")}")</li>
+                        }
+                        else
+                        {
+                            <li>@key[2..] „@entry.Name“ – @(entry.Users.Count == 0 ? "wird nirgends genutzt" : $"genutzt von {entry.Users.Count}: {string.Join(", ", entry.Users.Take(3))}{(entry.Users.Count > 3 ? " …" : "")}")</li>
+                        }
+                    }
+                    @if (_deletes.Count > 12)
+                    {
+                        <li>@T($"und {_deletes.Count - 12} weitere, die nirgends genutzt werden oder weniger Nutzer haben", $"and {_deletes.Count - 12} more that are not used anywhere or have fewer users")</li>
+                    }
+                </ul>
+                <label class="hint"><input type="checkbox" checked="@_deleteConfirmed" @onchange="() => _deleteConfirmed = !_deleteConfirmed" />
+                    @(AffectedCount == 0 ? T("Ja, löschen.", "Yes, delete.") : T($"Ja, löschen. Mir ist klar, dass {AffectedCount} Combi-Timbres bzw. Set-List-Slots danach anders klingen.", $"Yes, delete. I understand that {AffectedCount} Combi timbres or Set List slots will sound different afterwards."))</label>
+            </div>
+        }
+        <div class="actions">
+            <button class="primary" type="button" disabled="@(!CanRun(plan))" @onclick="RunCopy">@T("Neue Datei erzeugen", "Create new file")</button>
+            <span class="safe">@T("Quelle und Ziel bleiben unverändert. Gesichert wird erst im nächsten Schritt.", "Source and target stay unchanged. Nothing is saved until the next step.")</span>
+        </div>
+        @if (_busy != null)
+        {
+            <p class="hint">@_busy</p>
+            <div class="progress busy"><div></div></div>
+        }
+        @if (_error != null)
+        {
+            <div class="error">
+                <strong>@_error.Message</strong>
+                @if (_error.Problems.Count > 0)
+                {
+                    <ul>
+                        @foreach (var problem in _error.Problems.Take(20))
+                        {
+                            <li>@problem</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+        @if (_result != null)
+        {
+            <div class="result">
+                <strong>@T("Neue Datei erzeugt und geprüft, aber noch nicht gesichert.", "New file created and verified, but not saved yet.")</strong>
+                <span>@T("Jede Combi nutzt dieselben Sounds wie in der Quelle. Die Datei liegt nur hier in der Seite: Erst mit „Datei sichern“ landet sie auf deinem Gerät (Mac: Downloads, iPad: Dateien-App). Beim Neuladen der Seite ist sie weg.", "Every Combi uses the same sounds as in the source. The file only exists here in the page: it reaches your device only with “Save file” (Mac: Downloads, iPad: Files app). If you reload the page, it is gone.")</span>
+                <div class="namefield">
+                    <label class="hint" for="outname">@T("Dateiname", "File name")</label>
+                    <input id="outname" @bind="_outName" maxlength="20" />
+                    <span class="hint">@T("höchstens 16 Zeichen vor „.PCG“", "16 characters at most before “.PCG”")</span>
+                </div>
+                <div class="actions">
+                    <button class="primary" type="button" @onclick="SaveResult">@T("Datei sichern", "Save file")</button>
+                    <button class="secondary" type="button" @onclick="UseResultAsTarget">@T("Als neues Ziel weiterverwenden", "Continue with this as target")</button>
+                    <span class="hint">@_saveStatus</span>
+                </div>
+                @if (_result.Combis.Count + _result.Programs.Count > 0)
+                {
+                    @if (_resultBanks.Count > 0)
+                    {
+                        <div class="warnbox" style="border-color:var(--accent);background:var(--panel)">
+                            <strong style="color:var(--accent)">@T("Diese Sounds nutzen eigene Samples", "These sounds use your own samples")</strong>
+                            @if (_packBank is { } packBank)
+                            {
+                                <span>@T($"Sample-Bank „{packBank.Name}“ gefunden: {packBank.Multisamples} Multisample(s), {packBank.Files} Sample-Datei(en), {packBank.Bytes / 1024} KB. Das Paket bekommt daraus eine eigene kleine Sample-Bank mit eigener Kennung.", $"Sample bank “{packBank.Name}” found: {packBank.Multisamples} Multisample(s), {packBank.Files} sample file(s), {packBank.Bytes / 1024} KB. From it, the pack gets its own small sample bank with its own ID.")</span>
+                            }
+                            else
+                            {
+                                <span>@T("Für ein Paket mit Samples den Ordner wählen, in dem die KSC deiner Sample-Bank und ihr Sample-Ordner liegen. Gelesen werden nur die Samples, die diese Sounds brauchen. Ohne Auswahl enthält das Paket nur die PCG.", "For a pack with samples, choose the folder that holds the KSC of your sample bank and its sample folder. Only the samples these sounds need are read. Without a choice, the pack contains only the PCG.")</span>
+                            }
+                            @if (_packBankStatus != null)
+                            {
+                                <span class="hint">@_packBankStatus</span>
+                            }
+                            <div class="actions" hidden="@(_packBankStatus != null)">
+                                <MultiPicker Label="@(_packBank == null ? T("Ordner der Sample-Bank wählen", "Choose sample bank folder") : T("Anderen Ordner wählen", "Choose another folder"))" Folder="true" OnFiles="PickPackBank" />
+                            </div>
+                            @if (_packBankError != null)
+                            {
+                                <span style="color:var(--bad)">@_packBankError</span>
+                            }
+                            @if (_resultBanks.Count > 1)
+                            {
+                                <span class="hint">@T($"Die Sounds nutzen {_resultBanks.Count} verschiedene Sample-Bänke. Ins Paket kommt bisher nur eine davon.", $"The sounds use {_resultBanks.Count} different sample banks. For now, only one of them goes into the pack.")</span>
+                            }
+                        </div>
+                    }
+                    <div class="actions">
+                        <button class="secondary" type="button" @onclick="SavePackage">@T("Als Einzelsound-Paket sichern", "Save as single-sound pack")</button>
+                        <span class="hint">@(_packageStatus ?? T("Nur die Bänke mit den übernommenen Sounds, als Paket für den Reiter „Sound einfügen“.", "Only the banks with the transferred sounds, as a pack for the “Add a sound” tab."))</span>
+                    </div>
+                    @if (_package != null && (_packageExtra + _package.MissingPrograms.Count + _package.FactoryPrograms.Count + _package.MissingWaveSequences.Count) > 0)
+                    {
+                        <ul class="notes">
+                            @if (_packageExtra > 0)
+                            {
+                                @if (English)
+                                {
+                                    <li><strong>The pack also contains @_packageExtra other sounds</strong> that were already in these banks (whole banks are saved). For a clean single-sound pack, use an empty PCG as the target.</li>
+                                }
+                                else
+                                {
+                                    <li><strong>Im Paket stecken noch @_packageExtra weitere Sounds</strong>, die vorher schon in diesen Bänken lagen (es werden ganze Bänke gesichert). Für ein reines Einzelsound-Paket als Ziel eine leere PCG nehmen.</li>
+                                }
+                            }
+                            @if (_package.FactoryPrograms.Count > 0)
+                            {
+                                <li>@T($"{_package.FactoryPrograms.Count} Werks-Program(s) sind nicht im Paket, nur Verweise. Für Kunden mit geänderten Werks-Bänken vorher „Auch Programs kopieren, die das Ziel schon hat“ anhaken.", $"{_package.FactoryPrograms.Count} factory Program(s) are not in the pack, only references to them. For customers with changed factory banks, tick “Also copy Programs the target already has” first.")</li>
+                            }
+                            @foreach (var line in _package.MissingPrograms.Concat(_package.MissingWaveSequences).Take(6))
+                            {
+                                <li>@T("Fehlt im Paket:", "Missing in the pack:") @line</li>
+                            }
+                        </ul>
+                    }
+                }
+            </div>
+            @if (_result.Deleted.Count > 0)
+            {
+                <h3>@T("Gelöscht", "Deleted")</h3>
+                <ul class="maplist">
+                    @foreach (var deleted in _result.Deleted)
+                    {
+                        <li><span class="what">@deleted.Name <span class="tag del">@T("gelöscht", "deleted")</span></span><span class="mono">@deleted.Key[2..]</span></li>
+                    }
+                </ul>
+            }
+            @if (_result.Renamed.Count > 0)
+            {
+                <h3>@T("Umbenannt", "Renamed")</h3>
+                <ul class="maplist">
+                    @foreach (var rename in _result.Renamed)
+                    {
+                        <li><span class="what">@rename.OldName → <strong>@rename.NewName</strong></span><span class="mono">@rename.Key[2..]</span></li>
+                    }
+                </ul>
+            }
+            @if (_result.Combis.Count > 0)
+            {
+                <h3>Combis</h3>
+                <ul class="maplist">
+                    @foreach (var combi in _result.Combis)
+                    {
+                        <li><span class="what">@combi.Name</span><span class="mono">@combi.From → @combi.To</span></li>
+                    }
+                </ul>
+            }
+            @if (_result.Programs.Count > 0)
+            {
+            <h3>Programs</h3>
+            <ul class="maplist">
+                @foreach (var program in _result.Programs)
+                {
+                    <li>
+                        <span class="what">@program.Name <span class="type">@program.Type</span>
+                            @if (program.Reused)
+                            {
+                                <span class="tag reuse">@T("schon vorhanden, mitgenutzt", "already there, reused")</span>
+                            }
+                            else
+                            {
+                                <span class="tag new">@T("neu", "new")</span>
+                            }
+                        </span>
+                        <span class="mono">@program.From → @program.To</span>
+                    </li>
+                }
+            </ul>
+            }
+            @if (_result.WaveSequencesCopied.Count + _result.WaveSequencesReused.Count > 0)
+            {
+                <h3>Wave Sequences</h3>
+                <ul class="maplist">
+                    @foreach (var line in _result.WaveSequencesCopied)
+                    {
+                        <li><span class="what">@line.Replace("->", "→") <span class="tag new">@T("kopiert", "copied")</span></span><span></span></li>
+                    }
+                    @foreach (var line in _result.WaveSequencesReused)
+                    {
+                        <li><span class="what">@line</span><span></span></li>
+                    }
+                </ul>
+            }
+        }
+    </section>
+</div>
+    <footer class="credits">
+        <span>
+            <span>@T("Basiert auf", "Based on") <a href="@AppInfo.PcgToolsUrl" target="_blank" rel="noopener">PCG Tools</a> @T("von Michel Keijzers (LGPL-3.0)", "by Michel Keijzers (LGPL-3.0)")</span>
+            <a href="@AppInfo.SourceUrl" target="_blank" rel="noopener">@T("Quelltext", "Source code")</a>
+        </span>
+        <span>
+            <a href="@AppInfo.ShopUrl" target="_blank" rel="noopener">Thorsten Hillmann Keyboard-Sounds</a>
+            <a href="@AppInfo.ImprintUrl" target="_blank" rel="noopener">@T("Impressum", "Legal notice")</a>
+            <a href="@AppInfo.PrivacyUrl" target="_blank" rel="noopener">@T("Datenschutz", "Privacy")</a>
+        </span>
+    </footer>
+</div>

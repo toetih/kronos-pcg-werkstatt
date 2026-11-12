@@ -1,0 +1,9 @@
+@* Ladezustand: erst Lesen mit Prozent, dann Auswerten ohne Prozentangabe. *@
+<div class="stack" style="gap:6px;width:100%;justify-items:center;align-items:center">
+    <p class="hint">@Slot.Status</p>
+    <div class="progress @(Slot.Progress < 0 ? "busy" : "")"><div style="width:@(Math.Max(Slot.Progress, 0))%"></div></div>
+</div>
+
+@code {
+    [Parameter] public PcgSlot Slot { get; set; }
+}

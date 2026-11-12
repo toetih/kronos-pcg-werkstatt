@@ -1,0 +1,321 @@
+@using PcgTools.Model.Common.Synth.Meta
+@using PcgTools.Model.Common.Synth.PatchPrograms
+@using PcgTools.Model.Common.Synth.PatchSorting
+@using KronosPcg.Tools
+@inject IJSRuntime JS
+
+@* Sortieren nach Namen (oder Kategorie) über mehrere Bänke. Die Vorschau rechnet nur die Reihenfolge aus und ändert
+   nichts; erst „Sortierte Datei erzeugen“ tauscht die Daten und passt alle Verweise an (geprüft, neue Datei). *@
+<section class="pane" aria-label="@T("Datei sortieren", "Sort file")">
+    <div class="pane-head">
+        <div class="pane-title">
+            <span class="eyebrow">@T("Datei · wird nur gelesen, Ergebnis ist eine neue Datei", "File · read only, the result is a new file")</span>
+            @if (_file.Pcg != null)
+            {
+                <span class="file">@_file.Name</span>
+            }
+        </div>
+        @if (_file.Pcg != null)
+        {
+            <div class="bar">
+                <span class="mode">
+                    <button type="button" aria-pressed="@P(_kind == PcgSorter.Kind.Combis)" @onclick="() => SetKind(PcgSorter.Kind.Combis)">Combis</button>
+                    <button type="button" aria-pressed="@P(_kind == PcgSorter.Kind.Programs)" @onclick="() => SetKind(PcgSorter.Kind.Programs)">Programs</button>
+                </span>
+                <FilePicker Label="@T("Andere Datei", "Other file")" Secondary="true" OnFile="LoadFile" />
+            </div>
+            @if (_file.Status != null)
+            {
+                <SlotProgress Slot="_file" />
+            }
+            <span class="eyebrow">@T("Bänke (auch mehrere: es wird über alle gewählten Bänke hinweg sortiert)", "Banks (several are fine: sorting runs across all selected banks)")</span>
+            <div class="chips">
+                @foreach (var bank in Banks())
+                {
+                    <button class="chip" type="button" aria-pressed="@P(_banks.Contains(bank.Id))" @onclick="() => ToggleBank(bank.Id)">
+                        @bank.Id<small>@TypePrefix(bank)@Filled(bank)</small>
+                    </button>
+                }
+            </div>
+            <div class="ctrl-row">
+                <span class="lbl">@T("Reihenfolge", "Order")</span>
+                <span class="mode">
+                    <button type="button" aria-pressed="@P(_order == PatchSorter.SortOrder.ESortOrderNameCategory)" @onclick="() => SetOrder(PatchSorter.SortOrder.ESortOrderNameCategory)">@T("Name A–Z", "Name A–Z")</button>
+                    <button type="button" aria-pressed="@P(_order == PatchSorter.SortOrder.ESortOrderCategoryName)" @onclick="() => SetOrder(PatchSorter.SortOrder.ESortOrderCategoryName)">@T("Kategorie, dann Name", "Category, then name")</button>
+                </span>
+            </div>
+        }
+    </div>
+    @if (_file.Pcg == null)
+    {
+        <LoadArea Slot="_file" Text="@T("Die PCG, die du sortieren willst. Sie wird nicht verändert.", "The PCG you want to sort. It is not changed.")" OnFile="LoadFile" />
+        @if (OfferedFile?.Pcg != null && _file.Status == null)
+        {
+            <div class="drop" style="padding-top:0">
+                <button class="secondary" type="button" @onclick="UseOffered">@T($"Ziel aus „Übernehmen“ verwenden ({OfferedFile.Name})", $"Use the target from “Transfer” ({OfferedFile.Name})")</button>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="sortgrid">
+            <div style="min-width:0">
+                <div class="eyebrow" style="margin-bottom:6px">@T("Vorher", "Before")</div>
+                <ul class="list boxed">
+                    <Virtualize Items="_plan" Context="row" ItemSize="42">
+                        <li class="row no-check @(row.Before.IsEmptyOrInit ? "free" : "")">
+                            <span class="id">@row.Place.Id</span>
+                            <span class="name">@(row.Before.IsEmptyOrInit ? T("frei", "free") : row.Before.Name)</span>
+                            <span class="meta"></span>
+                        </li>
+                    </Virtualize>
+                </ul>
+            </div>
+            <div style="min-width:0">
+                <div class="eyebrow" style="margin-bottom:6px">@T("Nachher", "After")</div>
+                <ul class="list boxed">
+                    <Virtualize Items="_plan" Context="row" ItemSize="42">
+                        <li class="row no-check @(row.After.IsEmptyOrInit ? "free" : "") @(row.Moves ? "moved" : "")">
+                            <span class="id">@row.Place.Id</span>
+                            <span class="name">@(row.After.IsEmptyOrInit ? T("frei", "free") : row.After.Name)</span>
+                            <span class="meta">@(row.Moves ? T($"war {row.After.Id}", $"was {row.After.Id}") : "")</span>
+                        </li>
+                    </Virtualize>
+                </ul>
+            </div>
+        </div>
+    }
+</section>
+
+@if (_file.Pcg != null)
+{
+    <section class="check" aria-live="polite">
+        <h2>@T("Was sich ändert", "What changes")</h2>
+        <div class="summary">
+            @if (_banks.Count == 0)
+            {
+                <span class="hint">@T("Oben eine oder mehrere Bänke wählen.", "Choose one or more banks above.")</span>
+            }
+            else
+            {
+                <span class="pill info">@_plan.Count(row => !row.Before.IsEmptyOrInit) @(_kind == PcgSorter.Kind.Combis ? "Combis" : "Programs") in @_banks.Count @T("Bank/Bänken", "bank(s)")</span>
+                <span class="pill @(MovedCount > 0 ? "ok" : "info")">@MovedCount @T("bekommen einen neuen Platz", "get a new slot")</span>
+                @if (_kind == PcgSorter.Kind.Programs && SelectedBanks().Select(TypeOf).Distinct().Count() > 1)
+                {
+                    <span class="pill warn">@T("HD-1 und EXi werden getrennt sortiert", "HD-1 and EXi are sorted separately")</span>
+                }
+            }
+        </div>
+        <ul class="notes">
+            @if (_kind == PcgSorter.Kind.Combis)
+            {
+                <li>@T("Set-List-Slots, die auf verschobene Combis zeigen, werden automatisch angepasst.", "Set List slots that point to moved Combis are adjusted automatically.")</li>
+                <li>@T("Die Timbres der Combis ändern sich nicht. Leere Plätze landen am Ende.", "The timbres of the Combis do not change. Empty slots end up at the end.")</li>
+            }
+            else
+            {
+                <li>@T("Alle Combis und Set-List-Slots, die auf verschobene Programs zeigen, werden automatisch angepasst, auch in Bänken, die du nicht sortierst.", "All Combis and Set List slots that point to moved Programs are adjusted automatically, also in banks you are not sorting.")</li>
+                <li>@T("Programs bleiben in Bänken ihres Typs (HD-1 oder EXi). Leere Plätze landen am Ende.", "Programs stay in banks of their type (HD-1 or EXi). Empty slots end up at the end.")</li>
+            }
+        </ul>
+        <div class="actions">
+            <button class="primary" type="button" disabled="@(MovedCount == 0 || _busy != null)" @onclick="RunSort">@T("Sortierte Datei erzeugen", "Create sorted file")</button>
+            <span class="safe">@T("Original bleibt unverändert. Gesichert wird erst im nächsten Schritt.", "The original stays unchanged. Nothing is saved until the next step.")</span>
+        </div>
+        @if (_busy != null)
+        {
+            <p class="hint">@_busy</p>
+            <div class="progress busy"><div></div></div>
+        }
+        @if (_error != null)
+        {
+            <div class="error">
+                <strong>@_error.Message</strong>
+                @if (_error.Problems.Count > 0)
+                {
+                    <ul>
+                        @foreach (var problem in _error.Problems.Take(20))
+                        {
+                            <li>@problem</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+        @if (_result != null)
+        {
+            <div class="result">
+                <strong>@T("Sortierte Datei erzeugt und geprüft, aber noch nicht gesichert.", "Sorted file created and verified, but not saved yet.")</strong>
+                <span>@T($"{_result.Moved.Count} Plätze haben sich geändert. Alle Combis und Set-List-Slots nutzen dieselben Sounds wie vorher; die Datei wurde nach dem Speichern noch einmal eingelesen und verglichen. Erst mit „Datei sichern“ landet sie auf deinem Gerät.", $"{_result.Moved.Count} slots have changed. All Combis and Set List slots use the same sounds as before; the file was read again after saving and compared. It reaches your device only with “Save file”.")</span>
+                <div class="namefield">
+                    <label class="hint" for="sortname">@T("Dateiname", "File name")</label>
+                    <input id="sortname" @bind="_outName" maxlength="20" />
+                    <span class="hint">@T("höchstens 16 Zeichen vor „.PCG“", "16 characters at most before “.PCG”")</span>
+                </div>
+                <div class="actions">
+                    <button class="primary" type="button" @onclick="Save">@T("Datei sichern", "Save file")</button>
+                    <button class="secondary" type="button" @onclick="ContinueWithResult">@T("Mit dem Ergebnis weiterarbeiten", "Continue with the result")</button>
+                    <span class="hint">@_saveStatus</span>
+                </div>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    /// <summary>Datei aus „Übernehmen“ (Ziel), die man zum Sortieren übernehmen kann.</summary>
+    [Parameter] public PcgSlot OfferedFile { get; set; }
+
+    private sealed record Row(IPatch Place, IPatch Before, IPatch After)
+    {
+        public bool Moves => !After.IsEmptyOrInit && After != Place;
+    }
+
+    private PcgSlot _file = new();
+    private PcgSorter.Kind _kind = PcgSorter.Kind.Combis;
+    private PatchSorter.SortOrder _order = PatchSorter.SortOrder.ESortOrderNameCategory;
+    private readonly HashSet<string> _banks = new();
+    private List<Row> _plan = new();
+    private string _busy;
+    private CopyException _error;
+    private SortResult _result;
+    private string _resultPath;
+    private string _outName;
+    private string _saveStatus;
+
+    private int MovedCount => _plan.Count(row => row.Moves);
+
+    private static string P(bool value) => value ? "true" : "false";
+
+    private static bool IsGm(IBank bank) => bank is IProgramBank programBank && programBank.Type == BankType.EType.Gm;
+
+    private static string TypeOf(IBank bank) => bank is IProgramBank programBank ? CopyService.SynthesisType(programBank) : "Combi";
+
+    private static string TypePrefix(IBank bank) => bank is IProgramBank ? TypeOf(bank) + " · " : "";
+
+    private static int Filled(IBank bank) => bank.Patches.Count(patch => !patch.IsEmptyOrInit);
+
+    private IEnumerable<IBank> Banks()
+    {
+        IBanks banks = _kind == PcgSorter.Kind.Programs ? _file.Pcg?.ProgramBanks : _file.Pcg?.CombiBanks;
+        return banks?.BankCollection.Where(bank => bank.IsLoaded && bank.IsWritable && !IsGm(bank)) ?? Enumerable.Empty<IBank>();
+    }
+
+    private List<IBank> SelectedBanks() => Banks().Where(bank => _banks.Contains(bank.Id)).ToList();
+
+    private async Task LoadFile(IBrowserFile file)
+    {
+        Clear();
+        await WebFiles.LoadAsync(_file, file, StateHasChanged, JS);
+        AfterLoad();
+    }
+
+    private void UseOffered()
+    {
+        Clear();
+        _file = new PcgSlot { Name = OfferedFile.Name, Path = OfferedFile.Path, Pcg = OfferedFile.Pcg };
+        AfterLoad();
+    }
+
+    private void AfterLoad()
+    {
+        _banks.Clear();
+        UpdatePlan();
+    }
+
+    private void SetKind(PcgSorter.Kind kind)
+    {
+        _kind = kind;
+        _banks.Clear();
+        Clear();
+        UpdatePlan();
+    }
+
+    private void SetOrder(PatchSorter.SortOrder order)
+    {
+        _order = order;
+        Clear();
+        UpdatePlan();
+    }
+
+    private void ToggleBank(string id)
+    {
+        if (!_banks.Remove(id))
+        {
+            _banks.Add(id);
+        }
+
+        Clear();
+        UpdatePlan();
+    }
+
+    /// <summary>Vorschau: dieselbe Reihenfolge wie beim echten Sortieren, aber ohne etwas zu tauschen.</summary>
+    private void UpdatePlan()
+    {
+        var banks = SelectedBanks();
+        _plan = banks.Count == 0
+            ? new List<Row>()
+            : PcgSorter.Plan(_kind, banks, _order).Select(item => new Row(item.Place, item.Place, item.Content))
+                .OrderBy(row => banks.IndexOf((IBank)row.Place.Parent)).ThenBy(row => row.Place.Index).ToList();
+    }
+
+    private void Clear()
+    {
+        _error = null;
+        _result = null;
+        _saveStatus = null;
+    }
+
+    private async Task RunSort()
+    {
+        Clear();
+        _busy = T("Wird sortiert und geprüft …", "Sorting and verifying …");
+        StateHasChanged();
+        await JS.InvokeVoidAsync("pcgPaint");
+        var outPath = WebFiles.NewPath("sortiert");
+        try
+        {
+            _result = SortService.Run(new SortRequest
+            {
+                File = _file.Path,
+                OutFile = outPath,
+                Kind = _kind,
+                Banks = SelectedBanks().Select(bank => bank.Id).ToList(),
+                Order = _order,
+            });
+            _resultPath = outPath;
+            _outName = WebFiles.ShortName(Path.GetFileNameWithoutExtension(_file.Name), "-sort") + ".PCG";
+        }
+        catch (CopyException exception)
+        {
+            _error = exception;
+        }
+        catch (Exception exception)
+        {
+            _error = new CopyException(exception.Message);
+        }
+        finally
+        {
+            _busy = null;
+        }
+    }
+
+    private async Task Save()
+    {
+        _saveStatus = T("Speichern wird angeboten …", "Offering the file for saving …");
+        StateHasChanged();
+        _saveStatus = await WebFiles.SaveAsync(JS, _resultPath, _outName);
+    }
+
+    /// <summary>Sortierte Datei als neue Arbeitsdatei laden, z. B. um weitere Bänke zu sortieren.</summary>
+    private async Task ContinueWithResult()
+    {
+        _busy = T("Ergebnis wird geladen …", "Loading the result …");
+        StateHasChanged();
+        await JS.InvokeVoidAsync("pcgPaint");
+        _file = new PcgSlot { Path = _resultPath, Name = _outName, Pcg = PcgFiles.Load(_resultPath) };
+        _busy = null;
+        Clear();
+        AfterLoad();
+    }
+}

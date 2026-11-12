@@ -1,0 +1,431 @@
+@using PcgTools.Model.Common.Synth.Meta
+@using KronosPcg.Tools
+
+@* Einfach-Modus: ein geführter Weg in vier Schritten, eine Karte pro Schritt, unten genau ein Hauptknopf. *@
+<div class="assist" lang="@(English ? "en" : "de")">
+    <ol class="steps" aria-label="@T("Schritte", "Steps")">
+        @for (var i = 0; i < Steps.Length; i++)
+        {
+            var n = i + 1;
+            <li class="@(n < _step ? "done" : "")" aria-current="@(n == _step ? "step" : null)">
+                <span class="n">@(n < _step ? "✓" : n.ToString())</span><span class="t">@Steps[i]</span>
+            </li>
+        }
+    </ol>
+
+    @if (_step == 1)
+    {
+        <section class="card" aria-labelledby="as1">
+            <h2 id="as1">@T("Welches Sound-Paket willst du einfügen?", "Which sound pack do you want to add?")</h2>
+            <p class="lead">@T("Die Datei aus deinem Download: die PCG, zum Beispiel „Skandal im Sperrbezirk.PCG“, oder bei Sounds mit Samples das ganze Paket als ZIP.", "The file from your download: the PCG, for example “Skandal im Sperrbezirk.PCG”, or, for sounds with samples, the whole pack as a ZIP.")</p>
+            @if (_info != null)
+            {
+                <div class="filecard"><span class="icon">PCG</span><span class="name">@(_allCombis.Count > 1 ? _pack.Name : PackTitle)</span><span class="meta">@(_allCombis.Count > 1 ? "" : _pack.Name + " · ")@PackMeta()</span></div>
+                @if (_allCombis.Count > 1)
+                {
+                    <div class="pick">
+                        <div class="pick-head">
+                            <strong>@T("Was soll eingefügt werden?", "What do you want to add?")</strong>
+                            <span>@(T($"{_chosen.Count} von {_allCombis.Count} Combis", $"{_chosen.Count} of {_allCombis.Count} Combis"))
+                                <button class="link" type="button" @onclick="() => ChooseAll(true)">@T("Alle", "All")</button>
+                                <button class="link" type="button" @onclick="() => ChooseAll(false)">@T("Keine", "None")</button></span>
+                        </div>
+                        <ul class="pick-list">
+                            @foreach (var combi in _allCombis)
+                            {
+                                var id = combi.Id;
+                                <li><label><input type="checkbox" checked="@_chosen.Contains(id)" @onchange="() => ToggleCombi(id)" />
+                                    <span class="pid">@id</span><span>@combi.Name</span></label></li>
+                            }
+                        </ul>
+                    </div>
+                }
+                <ul class="checks">
+                    @foreach (var check in PackChecks())
+                    {
+                        <li class="@(check.Ok ? "ok" : "warn")"><span class="mark">@(check.Ok ? "✓" : "!")</span>
+                            <span>@check.Text @if (check.Detail != null) { <small>@check.Detail</small> }</span></li>
+                    }
+                </ul>
+                <div><button class="link" type="button" @onclick="ResetPack">@T("Anderes Paket wählen", "Choose another pack")</button></div>
+            }
+            else
+            {
+                <LoadArea Slot="_pack" Text="@T("Sound-Paket (.PCG oder .zip) auswählen", "Choose a sound pack (.PCG or .zip)")" OnFile="LoadPack" />
+                @if (_packError != null)
+                {
+                    <p class="hint" style="color:var(--bad)">@_packError</p>
+                }
+            }
+            @if (_busy != null)
+            {
+                <p class="hint">@_busy</p>
+            }
+            <div class="nav"><span></span><button class="primary" type="button" disabled="@(!PackReady)" @onclick="Next">@T("Weiter", "Next")</button></div>
+        </section>
+    }
+    else if (_step == 2)
+    {
+        <section class="card" aria-labelledby="as2">
+            <h2 id="as2">@T("Jetzt deine eigene Kronos-Datei", "Now your own Kronos file")</h2>
+            <p class="lead">@T("Die PCG mit deinen Sounds. Sie bleibt unverändert. Am Ende bekommst du eine neue Datei: deine Sounds plus das neue Paket.", "The PCG with your sounds. It stays unchanged. At the end you get a new file: your sounds plus the new pack.")</p>
+            @if (_mine.Pcg != null)
+            {
+                <div class="filecard"><span class="icon">PCG</span><span class="name">@_mine.Name</span><span class="meta">@MineMeta()</span></div>
+                @if (_mineError != null)
+                {
+                    <div class="error"><strong>@T("Das passt nicht", "That doesn’t fit")</strong><span>@_mineError</span></div>
+                }
+                <div><button class="link" type="button" @onclick="ResetMine">@T("Andere Datei wählen", "Choose another file")</button></div>
+                @if (HasSamples && _mineError == null)
+                {
+                    <div class="samples-box">
+                        <strong>@T("Dieses Paket bringt Samples mit. Hast du schon eigene Samples im Kronos?", "This pack comes with samples. Do you already have samples of your own in the Kronos?")</strong>
+                        <span class="mode">
+                            <button type="button" aria-pressed="@P(!_wantOwnBank)" @onclick="() => SetWantOwnBank(false)">@T("Nein", "No")</button>
+                            <button type="button" aria-pressed="@P(_wantOwnBank)" @onclick="() => SetWantOwnBank(true)">@T("Ja, eine eigene Sample-Bank", "Yes, my own sample bank")</button>
+                        </span>
+                        @if (!_wantOwnBank)
+                        {
+                            <p class="hint">@T("Dann bekommst du die Samples des Pakets als fertige Sample-Bank dazu.", "Then you get the pack’s samples as a ready-made sample bank.")</p>
+                        }
+                        else if (_ownBank != null)
+                        {
+                            <div class="filecard"><span class="icon">KSC</span><span class="name">@_ownBank.Name</span>
+                                <span class="meta">@_ownBank.Multisamples Multisamples · @_ownBank.Note</span></div>
+                            <div><button class="link" type="button" @onclick="ResetOwnBank">@T("Andere Sample-Bank wählen", "Choose another sample bank")</button></div>
+                        }
+                        else
+                        {
+                            <p class="hint">@T("Die neuen Samples werden hinten an deine Sample-Bank gehängt. Deine vorhandenen Samples behalten ihre Nummern, es wird nichts überschrieben.", "The new samples are appended to the end of your sample bank. Your existing samples keep their numbers, nothing is overwritten.")</p>
+                            @if (_ownStatus != null)
+                            {
+                                <p class="hint">@_ownStatus</p>
+                                <div class="progress busy"><div></div></div>
+                            }
+                            <div class="actions" hidden="@(_ownStatus != null)">
+                                <MultiPicker Label="@T("Ordner mit deinen Samples wählen", "Choose the folder with your samples")" Folder="true" OnFiles="LoadOwnBank" />
+                                <MultiPicker Label="@T("Nur die zwei KSC-Dateien wählen (iPad)", "Choose only the two KSC files (iPad)")" OnFiles="LoadOwnBank" />
+                            </div>
+                            <p class="hint">@T("Am einfachsten: den Ordner wählen, in dem deine .KSC, die „…_UserBank.KSC“ und der Sample-Ordner liegen. Dann bekommst du ein vollständiges Paket zurück.", "Easiest: choose the folder that holds your .KSC, the “…_UserBank.KSC” and the sample folder. Then you get a complete package back.")</p>
+                            @if (_ownError != null)
+                            {
+                                <div class="error"><strong>@T("Das passt nicht", "That doesn’t fit")</strong><span>@_ownError</span></div>
+                            }
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <LoadArea Slot="_mine" Text="@T("Deine PCG (.PCG) auswählen", "Choose your PCG (.PCG)")" OnFile="LoadMine" />
+                @if (English)
+                {
+                    <div class="howto"><strong>No file on your computer yet?</strong> This is how you get it from the Kronos:
+                        <ol>
+                            <li>Plug a USB stick into the Kronos.</li>
+                            <li>Disk mode → Save → choose “Save PCG”, leave all banks checked and save to the USB stick.</li>
+                            <li>Plug the USB stick into your computer or iPad and choose the .PCG file here.</li>
+                        </ol>
+                    </div>
+                }
+                else
+                {
+                    <div class="howto"><strong>Noch keine Datei am Rechner?</strong> So holst du sie vom Kronos:
+                        <ol>
+                            <li>USB-Stick in den Kronos stecken.</li>
+                            <li>Disk-Modus → Save → „Save PCG“ wählen, alle Bänke angehakt lassen und auf den Stick speichern.</li>
+                            <li>Stick an den Rechner oder ans iPad, die .PCG-Datei hier auswählen.</li>
+                        </ol>
+                    </div>
+                }
+            }
+            <div class="nav"><button class="link" type="button" @onclick="Back">@T("Zurück", "Back")</button>
+                <button class="primary" type="button" disabled="@(!MineReady)" @onclick="Next">@T("Weiter", "Next")</button></div>
+        </section>
+    }
+    else if (_step == 3)
+    {
+        <section class="card" aria-labelledby="as3">
+            <h2 id="as3">@(_info.Combis.Count > 1 || (_info.Combis.Count == 0 && _info.Programs.Count > 1) ? T($"Hier landen die {PackTitle}", $"Here is where the {PackTitle} go") : T($"Hier landet „{PackTitle}“", $"Here is where “{PackTitle}” goes"))</h2>
+            <p class="lead">@T("Wir haben freie Plätze für dich gefunden. Es wird nichts überschrieben. Mit „ändern“ wählst du selbst, wohin die Combi und die Sounds kommen.", "We found free slots for you. Nothing is overwritten. With “change” you choose yourself where the Combi and the sounds go.")</p>
+            <div class="where">
+                @foreach (var kind in Kinds())
+                {
+                    var arriving = Arriving(kind);
+                    var allThere = _preview != null && kind != "Combi" && arriving.Count == 0;
+                    var count = kind == "Combi" || allThere ? Needed(kind) : arriving.Count;
+                    <div class="where-row">
+                        <span>
+                            @if (kind == "Combi")
+                            {
+                                @(Needed(kind) == 1 ? T($"Combi „{PackTitle}“", $"Combi “{PackTitle}”") : $"{Needed(kind)} Combis")
+                            }
+                            else
+                            {
+                                @KindLabel(kind, _preview == null ? Needed(kind) : count)
+                                <small class="sub">@(allThere ? T($"{kind}, hast du schon in deiner PCG", $"{kind}, already in your PCG") : T($"{(count == 1 ? "passt" : "passen")} in {kind}-Bänke", $"{(count == 1 ? "fits" : "fit")} in {kind} banks"))</small>
+                            }
+                        </span>
+                        <span class="where-to">
+                            <strong>@(_preview == null ? (_bank.GetValueOrDefault(kind) ?? T("kein Platz", "no slot")) : arriving.Count == 0 ? T("schon vorhanden", "already there") : PlaceText(arriving.Select(m => m.To)))</strong>
+                            @if (_bank.ContainsKey(kind) && !allThere)
+                            {
+                                <button class="link" type="button" aria-expanded="@P(_choose == kind)" @onclick="() => ToggleChooser(kind)">@(_choose == kind ? T("fertig", "done") : T("ändern", "change"))</button>
+                            }
+                        </span>
+                    </div>
+                    @if (_choose == kind && ShownBank(kind) is { } shownBank)
+                    {
+                        var names = arriving.ToDictionary(m => m.To, m => m.Name);
+                        var grid = BankGrid(kind);
+                        <div class="chooser">
+                            <div class="kronos">
+                                <div class="banks" style="--cols:@(kind == "Combi" ? 2 : 3)" aria-label="@T("Bänke", "Banks")">
+                                    @foreach (var bank in grid)
+                                    {
+                                        if (bank == null)
+                                        {
+                                            <span></span>
+                                            continue;
+                                        }
+                                        var b = bank;
+                                        <button class="bank @(kind == "Combi" ? "" : "prog")" type="button" aria-pressed="@P(b == shownBank)"
+                                                disabled="@(!Selectable(kind, b))" title="@BankTitle(kind, b)" @onclick="() => ChooseBank(kind, b)">
+                                            @b.Id
+                                            @if (kind != "Combi")
+                                            {
+                                                <small>@CopyService.SynthesisType((PcgTools.Model.Common.Synth.PatchPrograms.IProgramBank)b)</small>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                                <div>
+                                    <div class="tiles">
+                                        @foreach (var patch in shownBank.Patches.Skip(_page * 16).Take(16))
+                                        {
+                                            var p = patch;
+                                            var no = p.Id[^3..];
+                                            if (names.TryGetValue(p.Id, out var newName))
+                                            {
+                                                <button class="tile new" type="button" disabled><span class="no">@no</span><span class="nm">@newName</span></button>
+                                            }
+                                            else if (!p.IsEmptyOrInit)
+                                            {
+                                                <button class="tile" type="button" disabled><span class="no">@no</span><span class="nm">@p.Name</span></button>
+                                            }
+                                            else
+                                            {
+                                                <button class="tile free" type="button" aria-label="@(T($"Ab {p.Id} ablegen", $"Place from {p.Id}"))" @onclick="() => ChooseSlot(kind, p)">
+                                                    <span class="no">@no</span><span class="nm">@T("frei", "free")</span></button>
+                                            }
+                                        }
+                                    </div>
+                                    <div class="pages">
+                                        @for (var page = 0; page < 8; page++)
+                                        {
+                                            var pg = page;
+                                            <button class="page" type="button" aria-pressed="@P(pg == _page)" @onclick="() => _page = pg">@((pg * 16).ToString("000"))–@((pg * 16 + 15).ToString("000"))</button>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            @if (English)
+                            {
+                                <p class="hint">Like on the Kronos: choose a bank, then tap a free slot. @(kind == "Combi" ? "The Combis" : "The sounds") go there from that slot on, used slots are skipped. Green is new.@(kind == "Combi" ? "" : " Greyed-out banks don’t fit these sounds, are full, or are factory banks.")</p>
+                            }
+                            else
+                            {
+                                <p class="hint">Wie am Kronos: Bank wählen, dann einen freien Platz antippen. Ab dort kommen @(kind == "Combi" ? "die Combis" : "die Sounds") hin, belegte Plätze werden übersprungen. Grün ist neu.@(kind == "Combi" ? "" : " Ausgegraute Bänke passen nicht für diese Sounds, sind voll oder sind Werks-Bänke.")</p>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+            @foreach (var (kind, count) in _shortage.OrderBy(pair => pair.Key))
+            {
+                var list = OverwriteList(kind);
+                var k = kind;
+                <div class="warnbox">
+                    @if (English)
+                    {
+                        <strong>There is no free slot left in your PCG for @count @kind @(count == 1 ? "sound" : "sounds")</strong>
+                    }
+                    else
+                    {
+                        <strong>Für @count @kind-@(count == 1 ? "Sound" : "Sounds") ist in deiner PCG kein Platz mehr frei</strong>
+                    }
+                    @if (list.Count < count)
+                    {
+                        if (English)
+                        {
+                            <span>There are not enough unused sounds that could be overwritten either (@list.Count of @count). Free up slots in your PCG, for example in the “Transfer” tab.</span>
+                        }
+                        else
+                        {
+                            <span>Es gibt auch nicht genug ungenutzte Sounds, die sich überschreiben ließen (@list.Count von @count). Mach in deiner PCG Platz, zum Beispiel im Reiter „Übernehmen“.</span>
+                        }
+                    }
+                    else
+                    {
+                        if (English)
+                        {
+                            <span>@(count == 1 ? "This 1 sound is" : $"These {count} sounds are") not used by any Combi, Set List slot or Drum Track. The toolbox can overwrite @(count == 1 ? "it" : "them"):</span>
+                        }
+                        else
+                        {
+                            <span>Diese @count @(count == 1 ? "Sound wird" : "Sounds werden") von keiner Combi, keinem Set-List-Slot und keinem Drum Track genutzt. Die Werkstatt kann sie überschreiben:</span>
+                        }
+                        <ul>
+                            @foreach (var program in list.Take(8))
+                            {
+                                <li>@program.Id @program.Name</li>
+                            }
+                            @if (list.Count > 8)
+                            {
+                                <li>@(T($"und {list.Count - 8} weitere", $"and {list.Count - 8} more"))</li>
+                            }
+                        </ul>
+                        <label class="hint"><input type="checkbox" checked="@_overwrite.Contains(k)" @onchange="e => SetOverwrite(k, (bool)e.Value!)" />
+                            @if (English)
+                            {
+                                <text>Yes, overwrite @(count == 1 ? "this 1 sound" : $"these {count} sounds"). If you play one of them directly in Program mode, it will be gone afterwards; your old PCG remains as a backup.</text>
+                            }
+                            else
+                            {
+                                <text>Ja, diese @count @(count == 1 ? "Sound" : "Sounds") überschreiben. Spielst du einen davon direkt im Program-Modus, ist er danach weg; deine alte PCG bleibt als Sicherung.</text>
+                            }
+                        </label>
+                    }
+                </div>
+            }
+            @if (ReusedCount > 0)
+            {
+                if (English)
+                {
+                    <p class="hint">You already have @ReusedCount @(ReusedCount == 1 ? "sound" : "sounds") in your PCG. @(ReusedCount == 1 ? "It is" : "They are") reused and not stored twice.</p>
+                }
+                else
+                {
+                    <p class="hint">@ReusedCount @(ReusedCount == 1 ? "Sound hast" : "Sounds hast") du schon in deiner PCG. @(ReusedCount == 1 ? "Er wird" : "Sie werden") mitgenutzt und nicht doppelt abgelegt.</p>
+                }
+            }
+            @if (_info.Combis.Count > 0)
+            {
+                <label class="toggle"><input type="checkbox" checked="@_rename" @onchange="e => SetRename((bool)e.Value!)" />
+                    <span>@(T($"Sounds nach dem Song benennen, z. B. „{RenameExample()}“. Dann siehst du am Kronos sofort, wozu ein Sound gehört.", $"Name the sounds after the song, e.g. “{RenameExample()}”. Then you see right away on the Kronos which song a sound belongs to."))</span></label>
+            }
+            @if (_previewBusy)
+            {
+                <p class="hint">@T("Plätze werden berechnet …", "Working out the slots …")</p>
+            }
+            @if (!OfferCoversError && (_error ?? _previewError) is { } problem)
+            {
+                <div class="error">
+                    <strong>@problem.Message</strong>
+                    @if (problem.Problems.Count > 0)
+                    {
+                        <ul>
+                            @foreach (var line in problem.Problems.Take(8))
+                            {
+                                <li>@line</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            }
+            @if (_busy != null)
+            {
+                <p class="hint">@_busy</p>
+                <div class="progress busy"><div></div></div>
+            }
+            <div class="nav"><button class="link" type="button" @onclick="Back">@T("Zurück", "Back")</button>
+                <button class="primary" type="button" disabled="@(_preview == null || _previewBusy || _busy != null)" @onclick="Insert">@T("Einfügen und prüfen", "Add and verify")</button></div>
+        </section>
+    }
+    else
+    {
+        var combi = _result.Combis.FirstOrDefault();
+        <section class="card" aria-labelledby="as4">
+            <div class="success"><strong id="as4">@T("Fertig und geprüft", "Done and verified")</strong>
+                @if (English)
+                {
+                    <span>@(_info.Combis.Count > 1 || (_info.Combis.Count == 0 && _info.Programs.Count > 1) ? $"The {PackTitle} are" : $"“{PackTitle}” is") in your new file, and @(_result.Deleted.Count > 0 ? "your other sounds" : "all your previous sounds") are still there unchanged.</span>
+                }
+                else
+                {
+                    <span>@(_info.Combis.Count > 1 || (_info.Combis.Count == 0 && _info.Programs.Count > 1) ? $"Die {PackTitle} sind" : $"„{PackTitle}“ ist") in deiner neuen Datei, und @(_result.Deleted.Count > 0 ? "deine übrigen Sounds" : "alle deine bisherigen Sounds") sind unverändert dabei.</span>
+                }
+            </div>
+            <ul class="checks">
+                @foreach (var check in ResultChecks())
+                {
+                    <li class="@(check.Ok ? "ok" : "warn")"><span class="mark">@(check.Ok ? "✓" : "!")</span>
+                        <span>@check.Text @if (check.Detail != null) { <small>@check.Detail</small> }</span></li>
+                }
+            </ul>
+            <div class="namefield">
+                <label class="hint" for="as-outname">Name</label>
+                <input id="as-outname" value="@BaseName" @oninput="e => BaseName = e.Value?.ToString()" maxlength="@NameLimit" />
+                <span class="hint" style="@((BaseName ?? "").Length > NameLimit ? "color:var(--bad)" : null)">@((BaseName ?? "").Length)/@NameLimit @T("Zeichen", "characters")</span>
+            </div>
+            @if (_zipFiles == null)
+            {
+                <p class="hint">@(T($"So heißt die neue Datei: „{BaseName}.PCG“.", $"This is the name of the new file: “{BaseName}.PCG”."))</p>
+            }
+            else if (CanRenameBank)
+            {
+                <label class="toggle"><input type="checkbox" checked="@_renameBank" @onchange="() => _renameBank = !_renameBank" />
+                    <span>@(T($"Alles gleich benennen: „{BaseName}.PCG“, „{(_renameBank ? BaseName : _sampleBankName)}.KSC“, „{(_renameBank ? BaseName : _sampleBankName)}_UserBank.KSC“ und der Sample-Ordner „{(_renameBank ? BaseName : _sampleBankName)}“. So findest du am Kronos alles unter einem Namen. Höchstens {NameLimit} Zeichen, weil der Kronos nur kurze Pfade verträgt.", $"Use one name for everything: “{BaseName}.PCG”, “{(_renameBank ? BaseName : _sampleBankName)}.KSC”, “{(_renameBank ? BaseName : _sampleBankName)}_UserBank.KSC” and the sample folder “{(_renameBank ? BaseName : _sampleBankName)}”. That way you find everything under one name on the Kronos. At most {NameLimit} characters, because the Kronos only handles short paths."))</span></label>
+            }
+            else
+            {
+                <p class="hint">@(T($"So heißt die neue PCG. Die KSC-Dateien und der Sample-Ordner behalten den Namen „{_sampleBankName}“, damit sie zu deinem vorhandenen Sample-Ordner passen.", $"This is the name of the new PCG. The KSC files and the sample folder keep the name “{_sampleBankName}” so that they match your existing sample folder."))</p>
+            }
+            <div class="nav"><span class="hint">@(_saveStatus ?? (_zipFiles == null ? T("Die neue Datei liegt erst hier in der Seite. Sichern nicht vergessen.", "The new file only exists here in the page so far. Don’t forget to save it.") : T($"Das fertige Paket (PCG, KSC-Dateien und {_zipFiles.Count - 2} Sample-Dateien) liegt erst hier in der Seite. Sichern nicht vergessen.", $"The finished package (PCG, KSC files and {_zipFiles.Count - 2} sample files) only exists here in the page so far. Don’t forget to save it.")))</span>
+                <button class="primary" type="button" @onclick="Save">@(_zipFiles == null ? T("Neue Datei sichern", "Save new file") : T("Fertiges Paket sichern (ZIP)", "Save finished package (ZIP)"))</button></div>
+            <div class="howto"><strong>@T("So kommt sie in deinen Kronos", "How to get it into your Kronos")</strong>
+                <ol>
+                    @if (_zipFiles == null)
+                    {
+                        <li>@T("Die neue Datei auf den USB-Stick kopieren.", "Copy the new file to the USB stick.")</li>
+                        @if (_info.UserSamples)
+                        {
+                            <li>@T("Zuerst die Samples des Pakets laden (Disk-Modus → .KSC-Datei → „Load“).", "First load the pack’s samples (Disk mode → .KSC file → “Load”).")</li>
+                        }
+                    }
+                    else if (ResultIsComplete)
+                    {
+                        <li>@(T($"Das ZIP entpacken und den ganzen Inhalt auf den USB-Stick kopieren: die PCG, die zwei KSC-Dateien und den Ordner „{ShownBankName}“.", $"Unzip the ZIP and copy everything in it to the USB stick: the PCG, the two KSC files and the folder “{ShownBankName}”."))</li>
+                        <li>@(T($"Am Kronos zuerst die Sample-Bank laden (Disk-Modus → „{ShownBankName}.KSC“ → „Load“).", $"On the Kronos, load the sample bank first (Disk mode → “{ShownBankName}.KSC” → “Load”)."))</li>
+                    }
+                    else
+                    {
+                        <li>@(T($"Das ZIP entpacken. Die PCG und die zwei KSC-Dateien auf den Stick zu deinem Sample-Ordner „{ShownBankName}“ kopieren; die alten KSC-Dateien dabei ersetzen.", $"Unzip the ZIP. Copy the PCG and the two KSC files to the USB stick, next to your sample folder “{ShownBankName}”; replace the old KSC files."))</li>
+                        @if (English)
+                        {
+                            <li><strong>Copy the contents</strong> of the folder “@ShownBankName” from the ZIP into your existing folder “@ShownBankName”. Do not replace the folder, otherwise your previous samples will be missing.</li>
+                        }
+                        else
+                        {
+                            <li><strong>Den Inhalt</strong> des Ordners „@ShownBankName“ aus dem ZIP in deinen vorhandenen Ordner „@ShownBankName“ kopieren. Den Ordner nicht ersetzen, sonst fehlen deine bisherigen Samples.</li>
+                        }
+                        <li>@(T($"Am Kronos zuerst die Sample-Bank laden (Disk-Modus → „{ShownBankName}.KSC“ → „Load“).", $"On the Kronos, load the sample bank first (Disk mode → “{ShownBankName}.KSC” → “Load”)."))</li>
+                    }
+                    <li>@T("Am Kronos: Disk-Modus → die neue PCG wählen → „Load“.", "On the Kronos: Disk mode → choose the new PCG → “Load”.")</li>
+                    @if (combi != null)
+                    {
+                        <li>@(T($"Fertig. „{combi.Name}“ findest du im Combi-Modus auf {combi.To[..^3]} {combi.To[^3..]}.", $"Done. You find “{combi.Name}” in Combi mode at {combi.To[..^3]} {combi.To[^3..]}."))</li>
+                    }
+                </ol>
+                <p class="hint" style="margin-top:8px">@T("Tipp: Behalte deine alte PCG als Sicherung, bis du alles angespielt hast.", "Tip: Keep your old PCG as a backup until you have played everything.")</p>
+            </div>
+            @if (_busy != null)
+            {
+                <p class="hint">@_busy</p>
+            }
+            <div class="nav"><button class="link" type="button" @onclick="Again">@T("Noch ein Paket in diese Datei einfügen", "Add another pack to this file")</button>
+                <button class="link" type="button" @onclick="StartOver">@T("Von vorn", "Start over")</button></div>
+        </section>
+    }
+</div>

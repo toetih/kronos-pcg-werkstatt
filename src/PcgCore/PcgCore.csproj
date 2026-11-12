@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Plattformunabhängiger Kern aus PCG Tools (Michel Keijzers, LGPL-3.0), ohne WPF-Oberfläche. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>PcgTools</RootNamespace>
+    <AssemblyName>PcgCore</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <NoWarn>$(NoWarn);CS0168;CS0219;CS0162;CS0414;CS0649;CS0169;CS1591;CA1416;SYSLIB0011;CS8981</NoWarn>
+  </PropertyGroup>
+  <PropertyGroup>
+    <V>../../vendor/pcgtools</V>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(V)/KorgKronosTools/Model/**/*.cs" />
+    <Compile Include="$(V)/KorgKronosTools/ClipBoard/**/*.cs" />
+    <Compile Include="$(V)/KorgKronosTools/ListGenerator/**/*.cs" />
+    <Compile Include="$(V)/KorgKronosTools/OpenedFiles/**/*.cs" />
+    <Compile Include="$(V)/KorgKronosTools/ViewModels/Commands/PcgCommands/**/*.cs" />
+    <Compile Include="$(V)/KorgKronosTools/PcgToolsResources/**/*.cs" />
+    <Compile Include="$(V)/KorgKronosTools/Properties/Settings.Designer.cs" />
+    <Compile Include="$(V)/KorgKronosTools/Properties/Annotations.cs" />
+    <Compile Include="$(V)/Common/**/*.cs" />
+    <Compile Include="Shims/**/*.cs" />
+    <Compile Include="Tools/**/*.cs" />
+    <!-- Nur in der privaten Fassung vorhanden (Kronos-zu-Nautilus-Umsteller). -->
+    <EmbeddedResource Include="../../data/kronos-nautilus-mapping.json" LogicalName="KronosPcg.kronos-nautilus-mapping.json" Condition="Exists('../../data/kronos-nautilus-mapping.json')" />
+    <EmbeddedResource Include="$(V)/KorgKronosTools/PcgToolsResources/Strings*.resx" LogicalName="PcgTools.PcgToolsResources.%(Filename).resources" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
+  </ItemGroup>
+</Project>

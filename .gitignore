@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+.vs/
+# Testdateien nicht einchecken (Kunden- und eigene Sounds)
+*.PCG
+*.pcg
+testdata/

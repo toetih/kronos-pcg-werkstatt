@@ -1,0 +1,44 @@
+# Baut die Werkstatt bei jeder Änderung auf "main" und stellt sie als Webseite bereit (GitHub Pages).
+# Einmalig nötig: im Projekt unter Settings > Pages als Quelle "GitHub Actions" wählen.
+name: Webseite bauen und veröffentlichen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Solange das Projekt privat ist, passiert nichts (GitHub Pages gibt es dort erst nach dem Umschalten auf öffentlich).
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Webseite bauen
+        run: tools/publish-site.sh "$RUNNER_TEMP/site"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,11 @@
+@* Datei-Auswahl als Knopf. Ohne accept-Filter: iPad/iOS sperrt sonst unbekannte Endungen wie .PCG. *@
+<span class="picker">
+    <button class="@(Secondary ? "secondary" : "primary")" type="button" tabindex="-1">@Label</button>
+    <InputFile OnChange="e => OnFile.InvokeAsync(e.File)" aria-label="@Label" />
+</span>
+
+@code {
+    [Parameter] public string Label { get; set; } = T("PCG auswählen", "Choose PCG");
+    [Parameter] public bool Secondary { get; set; }
+    [Parameter] public EventCallback<IBrowserFile> OnFile { get; set; }
+}

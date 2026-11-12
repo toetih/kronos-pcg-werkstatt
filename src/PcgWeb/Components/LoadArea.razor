@@ -1,0 +1,25 @@
+@* Leeres Feld mit Dateiauswahl und Ladebalken (erst Lesen mit Prozent, dann Auswerten). *@
+<div class="drop">
+    @if (Slot.Status != null)
+    {
+        <SlotProgress Slot="Slot" />
+    }
+    else
+    {
+        <p>@Text</p>
+    }
+    @* Der Knopf bleibt beim Laden im Dokument (nur versteckt): Der Browser liest die Datei über dieses Element. *@
+    <div hidden="@(Slot.Status != null)">
+        <FilePicker OnFile="OnFile" />
+    </div>
+    @if (Slot.Error != null && Slot.Status == null)
+    {
+        <p style="color:var(--bad)">@Slot.Error</p>
+    }
+</div>
+
+@code {
+    [Parameter] public PcgSlot Slot { get; set; }
+    [Parameter] public string Text { get; set; }
+    [Parameter] public EventCallback<IBrowserFile> OnFile { get; set; }
+}
