@@ -129,7 +129,7 @@
                     <div class="howto"><strong>No file on your computer yet?</strong> This is how you get it from the Kronos:
                         <ol>
                             <li>Plug a USB stick into the Kronos.</li>
-                            <li>Disk mode → Save → choose “Save PCG”, leave all banks checked and save to the USB stick.</li>
+                            <li>Disk mode → Save → choose “Save All” and save to the USB stick. This saves your sounds and your own samples together. (Or separately: “Save PCG” with all banks checked, plus “Save Sampling Data” if you have your own samples.)</li>
                             <li>Plug the USB stick into your computer or iPad and choose the .PCG file here.</li>
                         </ol>
                     </div>
@@ -139,7 +139,7 @@
                     <div class="howto"><strong>Noch keine Datei am Rechner?</strong> So holst du sie vom Kronos:
                         <ol>
                             <li>USB-Stick in den Kronos stecken.</li>
-                            <li>Disk-Modus → Save → „Save PCG“ wählen, alle Bänke angehakt lassen und auf den Stick speichern.</li>
+                            <li>Disk-Modus → Save → „Save All“ wählen und auf den Stick speichern. Damit sind deine Sounds und deine eigenen Samples zusammen gesichert. (Oder einzeln: „Save PCG“ mit allen Bänken, dazu „Save Sampling Data“, wenn du eigene Samples hast.)</li>
                             <li>Stick an den Rechner oder ans iPad, die .PCG-Datei hier auswählen.</li>
                         </ol>
                     </div>
@@ -402,7 +402,6 @@
                     else if (ResultIsComplete)
                     {
                         <li>@(T($"Das ZIP entpacken und den ganzen Inhalt auf den USB-Stick kopieren: die PCG, die zwei KSC-Dateien und den Ordner „{ShownBankName}“.", $"Unzip the ZIP and copy everything in it to the USB stick: the PCG, the two KSC files and the folder “{ShownBankName}”."))</li>
-                        <li>@(T($"Am Kronos zuerst die Sample-Bank laden (Disk-Modus → „{ShownBankName}.KSC“ → „Load“).", $"On the Kronos, load the sample bank first (Disk mode → “{ShownBankName}.KSC” → “Load”)."))</li>
                     }
                     else
                     {
@@ -415,9 +414,20 @@
                         {
                             <li><strong>Den Inhalt</strong> des Ordners „@ShownBankName“ aus dem ZIP in deinen vorhandenen Ordner „@ShownBankName“ kopieren. Den Ordner nicht ersetzen, sonst fehlen deine bisherigen Samples.</li>
                         }
-                        <li>@(T($"Am Kronos zuerst die Sample-Bank laden (Disk-Modus → „{ShownBankName}.KSC“ → „Load“).", $"On the Kronos, load the sample bank first (Disk mode → “{ShownBankName}.KSC” → “Load”)."))</li>
                     }
-                    <li>@T("Am Kronos: Disk-Modus → die neue PCG wählen → „Load“.", "On the Kronos: Disk mode → choose the new PCG → “Load”.")</li>
+                    @if (_zipFiles != null && ShownBankName == (BaseName ?? "").Trim())
+                    {
+                        @* PCG und KSC heißen gleich: Der Kronos bietet dann beim Laden der PCG an, die KSC mitzuladen. *@
+                        <li>@T("Am Kronos: Disk-Modus → die neue PCG wählen → „Load“ und dabei „Load … .KSC too“ anhaken. Dann lädt der Kronos die Samples gleich mit.", "On the Kronos: Disk mode → choose the new PCG → “Load” and tick “Load … .KSC too”. The Kronos then loads the samples along with it.")</li>
+                    }
+                    else if (_zipFiles != null)
+                    {
+                        <li>@(T($"Am Kronos zuerst die Sample-Bank laden (Disk-Modus → „{ShownBankName}.KSC“ → „Load“), danach die neue PCG.", $"On the Kronos, load the sample bank first (Disk mode → “{ShownBankName}.KSC” → “Load”), then the new PCG."))</li>
+                    }
+                    else
+                    {
+                        <li>@T("Am Kronos: Disk-Modus → die neue PCG wählen → „Load“.", "On the Kronos: Disk mode → choose the new PCG → “Load”.")</li>
+                    }
                     @if (combi != null)
                     {
                         <li>@(T($"Fertig. „{combi.Name}“ findest du im Combi-Modus auf {combi.To[..^3]} {combi.To[^3..]}.", $"Done. You find “{combi.Name}” in Combi mode at {combi.To[..^3]} {combi.To[^3..]}."))</li>
