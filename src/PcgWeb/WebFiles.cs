@@ -231,6 +231,75 @@ public static class WebFiles
         return ksc;
     }
 
+    /// <summary>
+    /// Sound-Paket als entpackter Ordner (PCG, KSC-Dateien und Sample-Ordner): kopiert die Dateien mit ihren Pfaden in
+    /// den Speicher der Seite und lädt die eine PCG darin. Liefert wie beim ZIP den Pfad der KSC der Sample-Bank
+    /// des Pakets (oder null).
+    /// </summary>
+    public static async Task<string> LoadFolderPackAsync(PcgSlot slot, PickedFiles picked, Action refresh, IJSRuntime js)
+    {
+        slot.Error = null;
+        slot.Progress = -1;
+        slot.Status = T("Paket-Ordner wird gelesen …", "Reading the pack folder …");
+        refresh();
+        string ksc = null;
+        try
+        {
+            var wanted = picked.All.Where(item => new[] { ".PCG", ".KSC", ".KMP", ".KSF" }.Any(extension => HasExtension(item.Path, extension))).ToList();
+            var pcgs = wanted.Where(item => HasExtension(item.Path, ".PCG")).ToList();
+            if (pcgs.Count != 1)
+            {
+                throw new InvalidDataException(pcgs.Count == 0
+                    ? T("In diesem Ordner ist keine PCG.", "There is no PCG in this folder.")
+                    : T("In diesem Ordner liegen mehrere PCGs. Wähle den Ordner eines einzelnen Sound-Pakets.", "This folder holds several PCGs. Choose the folder of a single sound pack."));
+            }
+
+            if (wanted.Count > 5000 || wanted.Sum(item => item.File.Size) > MaxFileSize * 2)
+            {
+                throw new InvalidDataException(T("Der Ordner ist zu groß für ein Sound-Paket.", "The folder is too large for a sound pack."));
+            }
+
+            var dir = $"/tmp/paket-{++_counter}";
+            for (var index = 0; index < wanted.Count; index++)
+            {
+                if (index % 5 == 0)
+                {
+                    slot.Status = T($"Paket-Ordner wird gelesen … {index + 1}/{wanted.Count}", $"Reading the pack folder … {index + 1}/{wanted.Count}");
+                    refresh();
+                }
+
+                var target = Path.GetFullPath(Path.Combine(dir, wanted[index].Path));
+                if (!target.StartsWith(dir + "/"))
+                {
+                    throw new InvalidDataException(T("Der Ordner enthält ungültige Pfade.", "The folder contains invalid paths."));
+                }
+
+                await CopyAsync(wanted[index].File, target);
+            }
+
+            slot.Status = T("PCG wird ausgewertet …", "Reading the PCG …");
+            refresh();
+            await js.InvokeVoidAsync("pcgPaint");
+            var pcgPath = Path.GetFullPath(Path.Combine(dir, pcgs[0].Path));
+            slot.Pcg = PcgFiles.Load(pcgPath);
+            slot.Path = pcgPath;
+            slot.Name = pcgs[0].File.Name;
+            ksc = Directory.GetFiles(Path.GetDirectoryName(pcgPath)!)
+                .Where(path => path.EndsWith(".KSC", StringComparison.OrdinalIgnoreCase) && !path.EndsWith("_UserBank.KSC", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(path => SampleAttach.BankInfo(path) != null);
+        }
+        catch (Exception exception)
+        {
+            slot.Error = T($"Der Ordner konnte nicht gelesen werden: {exception.Message}", $"The folder could not be read: {exception.Message}");
+        }
+        finally
+        {
+            slot.Status = null;
+        }
+
+        return ksc;
+    }
+
     /// <summary>Fertiges Paket (PCG, KSC-Dateien, Sample-Ordner) als ein ZIP zum Sichern anbieten.</summary>
     /// <param name="files">Pfad im ZIP → Datei im Speicher der Seite</param>
     public static async Task<string> SaveZipAsync(IJSRuntime js, IReadOnlyList<(string Entry, string Path)> files, string wantedName)

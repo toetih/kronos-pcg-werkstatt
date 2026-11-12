@@ -83,6 +83,21 @@ public partial class AssistantView
             await WebFiles.LoadAsync(_pack, file, StateHasChanged, JS);
         }
 
+        await AnalyzePack();
+    }
+
+    /// <summary>Entpackter Paket-Ordner statt ZIP: PCG, KSC-Dateien und Sample-Ordner auf einmal.</summary>
+    private async Task LoadPackFolder(PickedFiles picked)
+    {
+        _info = null;
+        _packError = null;
+        _packSamples = null;
+        _packKsc = await WebFiles.LoadFolderPackAsync(_pack, picked, StateHasChanged, JS);
+        await AnalyzePack();
+    }
+
+    private async Task AnalyzePack()
+    {
         if (_pack.Pcg == null)
         {
             return;

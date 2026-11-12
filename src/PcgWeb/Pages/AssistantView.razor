@@ -17,7 +17,7 @@
     {
         <section class="card" aria-labelledby="as1">
             <h2 id="as1">@T("Welches Sound-Paket willst du einfügen?", "Which sound pack do you want to add?")</h2>
-            <p class="lead">@T("Die Datei aus deinem Download: die PCG, zum Beispiel „Skandal im Sperrbezirk.PCG“, oder bei Sounds mit Samples das ganze Paket als ZIP.", "The file from your download: the PCG, for example “Skandal im Sperrbezirk.PCG”, or, for sounds with samples, the whole pack as a ZIP.")</p>
+            <p class="lead">@T("Die Datei aus deinem Download: die PCG, zum Beispiel „Skandal im Sperrbezirk.PCG“, oder bei Sounds mit Samples das ganze Paket als ZIP oder als entpackter Ordner.", "The file from your download: the PCG, for example “Skandal im Sperrbezirk.PCG”, or, for sounds with samples, the whole pack as a ZIP or as an unzipped folder.")</p>
             @if (_info != null)
             {
                 <div class="filecard"><span class="icon">PCG</span><span class="name">@(_allCombis.Count > 1 ? _pack.Name : PackTitle)</span><span class="meta">@(_allCombis.Count > 1 ? "" : _pack.Name + " · ")@PackMeta()</span></div>
@@ -51,7 +51,12 @@
             }
             else
             {
-                <LoadArea Slot="_pack" Text="@T("Sound-Paket (.PCG oder .zip) auswählen", "Choose a sound pack (.PCG or .zip)")" OnFile="LoadPack" />
+                <LoadArea Slot="_pack" Text="@T("Sound-Paket auswählen: die .PCG oder das .zip (mit PCG, KSC-Dateien und Sample-Ordner)", "Choose a sound pack: the .PCG or the .zip (with PCG, KSC files and sample folder)")" OnFile="LoadPack" />
+                <div class="actions" style="justify-content:center" hidden="@(_pack.Status != null)">
+                    <span class="hint">@T("Paket schon entpackt?", "Pack already unzipped?")</span>
+                    <MultiPicker Label="@T("Paket-Ordner wählen", "Choose the pack folder")" Folder="true" OnFiles="LoadPackFolder" />
+                </div>
+                <p class="hint" style="text-align:center">@T("Der Ordner mit der PCG, den KSC-Dateien und dem Sample-Ordner. Am iPad bitte das ZIP nehmen.", "The folder with the PCG, the KSC files and the sample folder. On an iPad please use the ZIP.")</p>
                 @if (_packError != null)
                 {
                     <p class="hint" style="color:var(--bad)">@_packError</p>
