@@ -63,6 +63,12 @@ def font(match):
     return f'url("data:font/woff2;base64,{data}")'
 
 html = re.sub(r'url\("fonts/([^"]+\.woff2)"\)', font, html)
+# Logo einbetten (hell und dunkel)
+def logo(match):
+    data = base64.b64encode(open(os.path.join(www, match.group(1)), "rb").read()).decode("ascii")
+    return f'url("data:image/png;base64,{data}")'
+
+html = re.sub(r'url\("(logo[^"]*\.png)"\)', logo, html)
 html = html.replace('    <link rel="icon" href="icon-192.png" />\n', "")
 open(out, "w", encoding="utf-8").write(html)
 print(f"{out}: {os.path.getsize(out) / 1e6:.1f} MB, {len(files)} Dateien eingebettet")

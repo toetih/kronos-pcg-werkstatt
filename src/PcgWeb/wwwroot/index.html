@@ -3,8 +3,42 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Kostenlose Werkstatt für Korg-Kronos-PCG-Dateien: Sound-Pakete einfügen, ohne etwas zu überschreiben. Free tool for Korg Kronos PCG files." />
+    <title>Kronos PCG Werkstatt – Sounds in die eigene Korg-Kronos-PCG einfügen | Thorsten Hillmann Keyboard-Sounds</title>
+    <meta name="description" content="Kostenlose Werkstatt von Thorsten Hillmann Keyboard-Sounds für Korg-Kronos-PCG-Dateien: Sound-Pakete einfügen, ohne etwas zu überschreiben. Free tool for Korg Kronos PCG files." />
+    <link rel="canonical" href="https://werkstatt.keyboard-sounds.com/" />
     <link rel="icon" href="icon-192.png" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Thorsten Hillmann Keyboard-Sounds" />
+    <meta property="og:title" content="Kronos PCG Werkstatt – Sounds in die eigene Korg-Kronos-PCG einfügen" />
+    <meta property="og:description" content="Kostenlos, im Browser, ohne Anmeldung: neue Sounds in die eigene Kronos-PCG einfügen, ohne etwas zu überschreiben. Auch auf Englisch." />
+    <meta property="og:url" content="https://werkstatt.keyboard-sounds.com/" />
+    <meta property="og:image" content="https://werkstatt.keyboard-sounds.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Kronos PCG Werkstatt",
+      "alternateName": "Kronos PCG Toolbox",
+      "url": "https://werkstatt.keyboard-sounds.com/",
+      "description": "Kostenlose Werkstatt für Korg-Kronos-PCG-Dateien: Sound-Pakete in die eigene PCG einfügen, ohne etwas zu überschreiben. Läuft im Browser, die Dateien bleiben auf dem eigenen Gerät.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Web",
+      "inLanguage": ["de", "en"],
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+      "image": "https://werkstatt.keyboard-sounds.com/og.png",
+      "publisher": {
+        "@type": "Organization",
+        "name": "Thorsten Hillmann Keyboard-Sounds",
+        "url": "https://keyboard-sounds.com",
+        "logo": "https://werkstatt.keyboard-sounds.com/logo-gross.png"
+      }
+    }
+    </script>
 </head>
 <body>
 <!-- ARTIFACT-START -->
@@ -123,6 +157,11 @@ body {
 .wrap { display: flex; flex-direction: column; gap: 18px; }
 .stack { display: flex; flex-direction: column; gap: 14px; }
 header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.brandrow { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.brand { flex: none; display: block; width: 137px; height: 80px; background: url("logo.png") center / contain no-repeat; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .brand { background-image: url("logo-dark.png"); } }
+:root[data-theme="dark"] .brand { background-image: url("logo-dark.png"); }
+@media (max-width: 560px) { .brandrow { gap: 12px; align-items: start; } .brand { width: 96px; height: 56px; } }
 h1 { font-family: var(--font-display); font-weight: 700; font-size: 1.9rem; letter-spacing: .01em; margin: 0; line-height: 1.1; text-wrap: balance; }
 .sub { color: var(--muted); margin: 4px 0 0; }
 .badge { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); white-space: nowrap; }
@@ -332,15 +371,21 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent);
 </style>
 <div id="app">
   <div class="boot">
+    <a class="brand" href="https://keyboard-sounds.com" role="img" aria-label="Thorsten Hillmann Keyboard-Sounds"></a>
     <h1 id="boot-title">Kronos PCG Werkstatt</h1>
     <p class="hint" id="boot-text">Werkstatt wird geladen …</p>
     <div class="progress"><div></div></div>
   </div>
 </div>
+<noscript>
+  <p>Die Kronos PCG Werkstatt ist ein kostenloses Werkzeug von <a href="https://keyboard-sounds.com">Thorsten Hillmann Keyboard-Sounds</a> für den Korg Kronos. Du fügst neue Sounds in deine eigene PCG-Datei ein, ohne etwas zu überschreiben. Sie läuft im Browser (dafür muss JavaScript eingeschaltet sein), deine Dateien bleiben auf deinem Gerät. <a href="anleitung/werkstatt-anleitung.pdf">Anleitung als PDF</a></p>
+  <p lang="en">The Kronos PCG Toolbox is a free tool by <a href="https://keyboard-sounds.com/en">Thorsten Hillmann Keyboard-Sounds</a> for the Korg Kronos. Add new sounds to your own PCG file without overwriting anything. It runs in the browser (JavaScript must be enabled), your files stay on your device. <a href="anleitung/toolbox-guide.pdf">Guide as PDF</a></p>
+</noscript>
 <div id="blazor-error-ui">Es ist ein Fehler aufgetreten. Bitte die Seite neu laden.</div>
 <script>
   if (window.pcgLanguage() === 'en') {
     document.getElementById('boot-title').textContent = 'Kronos PCG Toolbox';
+    document.title = 'Kronos PCG Toolbox – add sounds to your own Korg Kronos PCG | Thorsten Hillmann Keyboard-Sounds';
     document.getElementById('boot-text').textContent = 'Loading the toolbox …';
     document.getElementById('blazor-error-ui').textContent = 'Something went wrong. Please reload the page.';
   }

@@ -5,9 +5,14 @@
 
 <div class="wrap">
     <header class="top">
-        <div>
-            <h1>@T("Kronos PCG Werkstatt", "Kronos PCG Toolbox")</h1>
-            <p class="sub">@T("Sound-Pakete einfügen, Combis und Programs übernehmen, umbenennen und sortieren. Für Korg Kronos, OS 3.x.", "Add sound packs, transfer, rename and sort Combis and Programs. For Korg Kronos, OS 3.x.")</p>
+        <div class="brandrow">
+            @* Logo führt zum Shop. Das Bild kommt aus dem Stylesheet (hell und dunkel). *@
+            <a class="brand" href="@AppInfo.ShopUrl" target="_blank" rel="noopener" role="img"
+               aria-label="Thorsten Hillmann Keyboard-Sounds" title="@T("Zum Shop von Thorsten Hillmann Keyboard-Sounds", "Visit the Thorsten Hillmann Keyboard-Sounds shop")"></a>
+            <div>
+                <h1>@T("Kronos PCG Werkstatt", "Kronos PCG Toolbox")</h1>
+                <p class="sub">@T("Sound-Pakete einfügen, Combis und Programs übernehmen, umbenennen und sortieren. Für Korg Kronos, OS 3.x.", "Add sound packs, transfer, rename and sort Combis and Programs. For Korg Kronos, OS 3.x.")</p>
+            </div>
         </div>
         <span style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 12px">
             @* Sprachschalter: merkt die Wahl und lädt die Seite neu (geladene Dateien müssen danach neu gewählt werden). *@
