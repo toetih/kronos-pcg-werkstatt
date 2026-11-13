@@ -52,7 +52,7 @@
         @if (OfferedFile?.Pcg != null && _file.Status == null)
         {
             <div class="drop" style="padding-top:0">
-                <button class="secondary" type="button" @onclick="UseOffered">@T($"Ziel aus „Übernehmen“ verwenden ({OfferedFile.Name})", $"Use the target from “Transfer” ({OfferedFile.Name})")</button>
+                <button class="secondary" type="button" @onclick="UseOffered">@T($"Ziel aus der Profi-Werkbank verwenden ({OfferedFile.Name})", $"Use the target from the Workbench ({OfferedFile.Name})")</button>
             </div>
         }
     }
@@ -163,7 +163,7 @@
 }
 
 @code {
-    /// <summary>Datei aus „Übernehmen“ (Ziel), die man zum Sortieren übernehmen kann.</summary>
+    /// <summary>Datei aus der Profi-Werkbank (Ziel), die man zum Sortieren übernehmen kann.</summary>
     [Parameter] public PcgSlot OfferedFile { get; set; }
 
     private sealed record Row(IPatch Place, IPatch Before, IPatch After)
